@@ -1,16 +1,16 @@
 {
-  "name": "opencode-helper",
-  "description": "opencode helper cli tool",
+  "name": "opencode-helper-cli",
+  "description": "CLI tool for managing opencode plugins",
   "version": "0.0.0",
   "author": "zhuchentong",
   "bin": {
     "och": "./bin/run.js"
   },
-  "bugs": "https://github.com/zhuchentong/opencode-helper/opencode-helper/issues",
+  "bugs": "https://github.com/zhuchentong/opencode-helper-cli/issues",
   "dependencies": {
+    "@inquirer/prompts": "^8.4.3",
     "@oclif/core": "^4",
     "@oclif/plugin-help": "^6",
-    "@oclif/plugin-plugins": "^5",
     "chalk": "^5.6.2",
     "cli-table3": "^0.6.5",
     "jsonc-parser": "^3.3.1"
@@ -22,6 +22,7 @@
     "@types/chai": "^4",
     "@types/mocha": "^10",
     "@types/node": "^18",
+    "bumpp": "^11.1.0",
     "chai": "^4",
     "eslint": "^9",
     "eslint-config-oclif": "^6",
@@ -30,6 +31,7 @@
     "oclif": "^4",
     "shx": "^0.3.3",
     "ts-node": "^10",
+    "tsdown": "^0.22.0",
     "typescript": "^5"
   },
   "engines": {
@@ -40,40 +42,40 @@
     "./dist",
     "./oclif.manifest.json"
   ],
-  "homepage": "https://github.com/zhuchentong/opencode-helper/opencode-helper",
+  "homepage": "https://github.com/zhuchentong/opencode-helper-cli",
   "keywords": [
-    "oclif"
+    "oclif",
+    "opencode",
+    "cli",
+    "plugin-manager"
   ],
   "license": "MIT",
-  "main": "dist/index.js",
+  "main": "dist/index.mjs",
   "type": "module",
   "oclif": {
     "bin": "och",
     "dirname": "och",
     "commands": "./dist/commands",
     "plugins": [
-      "@oclif/plugin-help",
-      "@oclif/plugin-plugins"
+      "@oclif/plugin-help"
     ],
     "topicSeparator": " ",
     "topics": {
-      "hello": {
-        "description": "Say hello to the world and others"
-      },
       "plugin": {
         "description": "Manage opencode plugins"
       }
     }
   },
-  "repository": "zhuchentong/opencode-helper/opencode-helper",
+  "repository": "zhuchentong/opencode-helper-cli",
   "scripts": {
-    "build": "shx rm -rf dist && tsc -b",
+    "build": "tsdown",
     "lint": "eslint",
     "postpack": "shx rm -f oclif.manifest.json",
     "posttest": "pnpm run lint",
-    "prepack": "oclif manifest && oclif readme",
+    "prepack": "oclif manifest",
+    "release": "bumpp",
     "test": "mocha --forbid-only \"test/**/*.test.ts\"",
-    "version": "oclif readme && git add README.md"
+    "typecheck": "tsc --noEmit"
   },
-  "types": "dist/index.d.ts"
+  "types": "dist/index.d.mts"
 }

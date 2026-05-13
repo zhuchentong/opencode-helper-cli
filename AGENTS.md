@@ -34,6 +34,7 @@ pnpm run prepack        # 生成 oclif manifest 和 README
 
 ## 注释规范
 
+- 注释优先使用**中文**
 - 函数使用 JSDoc 注释格式
 - 变量使用行内注释 `//`
 - 函数内关键逻辑使用行内注释 `//`

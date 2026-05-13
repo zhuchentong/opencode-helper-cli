@@ -8,7 +8,7 @@ import {loadGlobalConfig, loadProjectConfig} from '../../services/config.js'
 import {resolvePluginInfo} from '../../services/plugin.js'
 
 export default class PluginList extends Command {
-  static description = 'List opencode plugins and their versions'
+  static description = '列出 opencode 插件及其版本'
   static examples = [
     '<%= config.bin %> plugin list',
     '<%= config.bin %> plugin list -g',
@@ -17,7 +17,7 @@ export default class PluginList extends Command {
     global: Flags.boolean({
       char: 'g',
       default: false,
-      description: 'List globally installed plugins',
+      description: '列出全局安装的插件',
     }),
   }
 
@@ -26,16 +26,8 @@ export default class PluginList extends Command {
 
     const config = flags.global ? loadGlobalConfig() : loadProjectConfig()
 
-    if (!config) {
-      this.error(
-        flags.global
-          ? 'No global opencode config found (~/.config/opencode/opencode.json)'
-          : 'No project opencode config found (opencode.json)',
-      )
-    }
-
-    if (!config.plugin || config.plugin.length === 0) {
-      this.log('No plugins configured.')
+    if (!config || !config.plugin || config.plugin.length === 0) {
+      this.log('⚠️ 未找到插件配置。')
       return
     }
 
@@ -52,14 +44,14 @@ export default class PluginList extends Command {
    */
   private renderTable(plugins: PluginInfo[]): void {
     const table = new Table({
-      head: ['Plugin', 'Current', 'Latest'],
+      head: ['插件', '当前版本', '最新版本'],
       style: {
         head: ['cyan'],
       },
     })
 
     for (const p of plugins) {
-      const current = p.current ?? chalk.gray('not installed')
+      const current = p.current ?? chalk.gray('未安装')
       let latest: string
 
       if (p.latest === null) {

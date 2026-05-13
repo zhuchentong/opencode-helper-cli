@@ -38,21 +38,28 @@ export function parsePluginRef(ref: string): ParsedPluginRef {
 
 /**
  * Maps a plugin reference to its cache directory path.
+ * 兼容旧版目录名格式（使用 :/ 替换 :// 的格式）。
  */
 function getPackageCacheDir(ref: string, cacheBase: string): string {
   const parsed = parsePluginRef(ref)
 
   if (parsed.type === 'git') {
-    // Replace :// with :/ for filesystem-safe directory name
-    const urlWithoutProtocol = parsed.url!.replace('://', ':/')
-    return path.join(cacheBase, `${parsed.name}@${urlWithoutProtocol}`)
+    // 新格式：将 :// 替换为 -（Windows 兼容，: 不能用于目录名）
+    const newUrlPart = parsed.url!.replace('://', '-')
+    const newDir = path.join(cacheBase, `${parsed.name}@${newUrlPart}`)
+
+    // 兼容旧格式：检查使用 :/ 替换的旧目录是否存在
+    const oldUrlPart = parsed.url!.replace('://', ':/')
+    const oldDir = path.join(cacheBase, `${parsed.name}@${oldUrlPart}`)
+    if (fs.existsSync(oldDir)) return oldDir
+
+    return newDir
   }
 
   if (parsed.version) {
     return path.join(cacheBase, `${parsed.name}@${parsed.version}`)
   }
 
-  // Default to @latest suffix for unversioned npm packages
   return path.join(cacheBase, `${ref}@latest`)
 }
 
@@ -72,12 +79,18 @@ function readInstalledVersion(packageName: string, installDir: string): null | s
 }
 
 /**
+ * 跨平台 execFile 选项，仅在 Windows 上启用 shell（npm.cmd / git.cmd 需要）
+ */
+const execOptions = {shell: process.platform === 'win32', timeout: 60_000}
+
+/**
  * Queries the latest version of an npm package from the registry.
  * Returns null if the query fails.
  */
 async function fetchLatestVersion(packageName: string): Promise<null | string> {
   try {
     const {stdout} = await execFileAsync('npm', ['view', packageName, 'version'], {
+      ...execOptions,
       timeout: 15_000,
     })
     return stdout.trim() || null
@@ -87,13 +100,37 @@ async function fetchLatestVersion(packageName: string): Promise<null | string> {
 }
 
 /**
+ * 获取平台相关的缓存目录
+ * Linux: $XDG_CACHE_HOME 或 ~/.cache
+ * macOS: ~/Library/Caches
+ * Windows: %LOCALAPPDATA%
+ */
+export function getPlatformCacheDir(): string {
+  // 环境变量优先（主要针对 Linux XDG 规范）
+  const xdgCache = process.env.XDG_CACHE_HOME
+  if (xdgCache && path.isAbsolute(xdgCache)) return xdgCache
+
+  switch (process.platform) {
+    case 'darwin': {
+      return path.join(os.homedir(), 'Library', 'Caches', 'opencode')
+    }
+
+    case 'win32': {
+      return path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'), 'opencode')
+    }
+
+    default: {
+      return path.join(os.homedir(), '.cache', 'opencode')
+    }
+  }
+}
+
+/**
  * Returns the default cache directory for opencode packages.
  * Respects XDG_CACHE_HOME if set.
  */
 export function getDefaultCacheDir(): string {
-  const xdgCache = process.env.XDG_CACHE_HOME
-  const cacheBase = xdgCache && path.isAbsolute(xdgCache) ? xdgCache : path.join(os.homedir(), '.cache')
-  return path.join(cacheBase, 'opencode', 'packages')
+  return path.join(getPlatformCacheDir(), 'packages')
 }
 
 /**
@@ -116,5 +153,79 @@ export async function resolvePluginInfo(ref: string, cacheDir?: string): Promise
     current,
     latest,
     name: parsed.name,
+  }
+}
+
+/**
+ * 插件升级结果
+ */
+export interface UpgradeResult {
+  currentVersion: null | string
+  message?: string
+  name: string
+  previousVersion: null | string
+  status: 'failed' | 'skipped' | 'upgraded'
+}
+
+/**
+ * 升级单个插件到最新版本
+ * npm 插件：在缓存目录执行 npm install <name>@latest
+ * git 插件：在缓存目录执行 git pull && npm install
+ * 固定版本的 npm 插件会被跳过
+ */
+export async function upgradePlugin(ref: string, cacheDir?: string): Promise<UpgradeResult> {
+  const baseDir = cacheDir ?? getDefaultCacheDir()
+  const parsed = parsePluginRef(ref)
+  const installDir = getPackageCacheDir(ref, baseDir)
+  const previousVersion = readInstalledVersion(parsed.name, installDir)
+
+  // 固定版本的 npm 插件跳过升级
+  if (parsed.type === 'npm' && parsed.version) {
+    return {
+      currentVersion: previousVersion,
+      message: '固定版本，已跳过',
+      name: ref,
+      previousVersion,
+      status: 'skipped',
+    }
+  }
+
+  // 缓存目录不存在，跳过
+  if (!fs.existsSync(installDir)) {
+    return {
+      currentVersion: null,
+      message: '尚未安装',
+      name: parsed.name,
+      previousVersion: null,
+      status: 'skipped',
+    }
+  }
+
+  try {
+    if (parsed.type === 'git') {
+      // git 插件：先 git pull 再 npm install
+      await execFileAsync('git', ['pull'], {...execOptions, cwd: installDir})
+      await execFileAsync('npm', ['install'], {...execOptions, cwd: installDir})
+    } else {
+      // npm 插件：安装最新版本
+      await execFileAsync('npm', ['install', `${parsed.name}@latest`], {...execOptions, cwd: installDir})
+    }
+
+    const currentVersion = readInstalledVersion(parsed.name, installDir)
+    return {
+      currentVersion,
+      name: parsed.name,
+      previousVersion,
+      status: 'upgraded',
+    }
+  } catch (error) {
+    const currentVersion = readInstalledVersion(parsed.name, installDir)
+    return {
+      currentVersion,
+      message: error instanceof Error ? error.message : String(error),
+      name: parsed.name,
+      previousVersion,
+      status: 'failed',
+    }
   }
 }

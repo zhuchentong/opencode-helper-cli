@@ -1,13 +1,13 @@
-# opencode-helper
+# opencode-helper-cli
 
 opencode 辅助 CLI 工具，用于管理 [opencode](https://opencode.ai) 插件。
 
 ## 安装
 
 ```bash
-npm install -g opencode-helper
+npm install -g opencode-helper-cli
 # 或
-pnpm add -g opencode-helper
+pnpm add -g opencode-helper-cli
 ```
 
 ## 使用
