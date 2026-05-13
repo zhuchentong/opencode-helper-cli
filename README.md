@@ -1,396 +1,121 @@
-opencode-helper
-=================
+# opencode-helper
 
-opencode helper cli tool
+opencode 辅助 CLI 工具，用于管理 [opencode](https://opencode.ai) 插件。
 
+## 安装
 
-[![oclif](https://img.shields.io/badge/cli-oclif-brightgreen.svg)](https://oclif.io)
-[![Version](https://img.shields.io/npm/v/opencode-helper.svg)](https://npmjs.org/package/opencode-helper)
-[![Downloads/week](https://img.shields.io/npm/dw/opencode-helper.svg)](https://npmjs.org/package/opencode-helper)
-
-
-<!-- toc -->
-* [Usage](#usage)
-* [Commands](#commands)
-<!-- tocstop -->
-# Usage
-<!-- usage -->
-```sh-session
-$ npm install -g mycli123
-$ mycli123 COMMAND
-running command...
-$ mycli123 (--version)
-mycli123/0.0.0 darwin-arm64 node-v20.12.2
-$ mycli123 --help [COMMAND]
-USAGE
-  $ mycli123 COMMAND
-...
-```
-<!-- usagestop -->
-# Commands
-<!-- commands -->
-* [`mycli123 hello PERSON`](#mycli123-hello-person)
-* [`mycli123 hello world`](#mycli123-hello-world)
-* [`mycli123 help [COMMAND]`](#mycli123-help-command)
-* [`mycli123 plugins`](#mycli123-plugins)
-* [`mycli123 plugins add PLUGIN`](#mycli123-plugins-add-plugin)
-* [`mycli123 plugins:inspect PLUGIN...`](#mycli123-pluginsinspect-plugin)
-* [`mycli123 plugins install PLUGIN`](#mycli123-plugins-install-plugin)
-* [`mycli123 plugins link PATH`](#mycli123-plugins-link-path)
-* [`mycli123 plugins remove [PLUGIN]`](#mycli123-plugins-remove-plugin)
-* [`mycli123 plugins reset`](#mycli123-plugins-reset)
-* [`mycli123 plugins uninstall [PLUGIN]`](#mycli123-plugins-uninstall-plugin)
-* [`mycli123 plugins unlink [PLUGIN]`](#mycli123-plugins-unlink-plugin)
-* [`mycli123 plugins update`](#mycli123-plugins-update)
-
-## `mycli123 hello PERSON`
-
-Say hello
-
-```
-USAGE
-  $ mycli123 hello PERSON -f <value>
-
-ARGUMENTS
-  PERSON  Person to say hello to
-
-FLAGS
-  -f, --from=<value>  (required) Who is saying hello
-
-DESCRIPTION
-  Say hello
-
-EXAMPLES
-  $ mycli123 hello friend --from oclif
-  hello friend from oclif! (./src/commands/hello/index.ts)
+```bash
+npm install -g opencode-helper
+# 或
+pnpm add -g opencode-helper
 ```
 
-_See code: [src/commands/hello/index.ts](https://github.com/mdonnalley/mycli123/blob/v0.0.0/src/commands/hello/index.ts)_
+## 使用
 
-## `mycli123 hello world`
-
-Say hello world
-
-```
-USAGE
-  $ mycli123 hello world
-
-DESCRIPTION
-  Say hello world
-
-EXAMPLES
-  $ mycli123 hello world
-  hello world! (./src/commands/hello/world.ts)
+```bash
+och plugin list            # 列出项目级插件及版本
+och plugin list -g         # 列出全局插件及版本
+och plugin upgrade         # 升级所有项目级插件
+och plugin upgrade -g      # 升级所有全局插件
+och plugin upgrade -i      # 交互式选择要升级的插件
+och plugin upgrade <name>  # 升级指定插件
 ```
 
-_See code: [src/commands/hello/world.ts](https://github.com/mdonnalley/mycli123/blob/v0.0.0/src/commands/hello/world.ts)_
+## 命令
 
-## `mycli123 help [COMMAND]`
+### `och plugin list`
 
-Display help for mycli123.
+列出 opencode 插件及其当前版本和最新版本。
 
-```
-USAGE
-  $ mycli123 help [COMMAND...] [-n]
+| 标志 | 缩写 | 说明 |
+|------|------|------|
+| `--global` | `-g` | 列出全局安装的插件 |
 
-ARGUMENTS
-  COMMAND...  Command to show help for.
-
-FLAGS
-  -n, --nested-commands  Include all nested commands in the output.
-
-DESCRIPTION
-  Display help for mycli123.
+```bash
+och plugin list
+och plugin list -g
 ```
 
-_See code: [@oclif/plugin-help](https://github.com/oclif/plugin-help/blob/v6.0.21/src/commands/help.ts)_
-
-## `mycli123 plugins`
-
-List installed plugins.
+输出示例：
 
 ```
-USAGE
-  $ mycli123 plugins [--json] [--core]
-
-FLAGS
-  --core  Show core plugins.
-
-GLOBAL FLAGS
-  --json  Format output as json.
-
-DESCRIPTION
-  List installed plugins.
-
-EXAMPLES
-  $ mycli123 plugins
+┌───────────────────────┬────────────┬────────────┐
+│ 插件                  │ 当前版本    │ 最新版本    │
+├───────────────────────┼────────────┼────────────┤
+│ @scope/plugin-a       │ 1.0.0      │ 1.2.0      │
+│ plugin-b              │ 未安装      │ 2.0.0      │
+└───────────────────────┴────────────┴────────────┘
 ```
 
-_See code: [@oclif/plugin-plugins](https://github.com/oclif/plugin-plugins/blob/v5.0.16/src/commands/plugins/index.ts)_
+### `och plugin upgrade`
 
-## `mycli123 plugins add PLUGIN`
+升级 opencode 插件到最新版本。支持 npm 包和 git 仓库两种插件类型。
 
-Installs a plugin into mycli123.
+| 标志 | 缩写 | 说明 |
+|------|------|------|
+| `--global` | `-g` | 升级全局插件 |
+| `--interactive` | `-i` | 交互式选择要升级的插件 |
 
-```
-USAGE
-  $ mycli123 plugins add PLUGIN... [--json] [-f] [-h] [-s | -v]
-
-ARGUMENTS
-  PLUGIN...  Plugin to install.
-
-FLAGS
-  -f, --force    Force npm to fetch remote resources even if a local copy exists on disk.
-  -h, --help     Show CLI help.
-  -s, --silent   Silences npm output.
-  -v, --verbose  Show verbose npm output.
-
-GLOBAL FLAGS
-  --json  Format output as json.
-
-DESCRIPTION
-  Installs a plugin into mycli123.
-
-  Uses bundled npm executable to install plugins into /Users/mdonnalley/.local/share/mycli123
-
-  Installation of a user-installed plugin will override a core plugin.
-
-  Use the MYCLI123_NPM_LOG_LEVEL environment variable to set the npm loglevel.
-  Use the MYCLI123_NPM_REGISTRY environment variable to set the npm registry.
-
-ALIASES
-  $ mycli123 plugins add
-
-EXAMPLES
-  Install a plugin from npm registry.
-
-    $ mycli123 plugins add myplugin
-
-  Install a plugin from a github url.
-
-    $ mycli123 plugins add https://github.com/someuser/someplugin
-
-  Install a plugin from a github slug.
-
-    $ mycli123 plugins add someuser/someplugin
+```bash
+och plugin upgrade                          # 升级全部项目级插件
+och plugin upgrade -g                       # 升级全部全局插件
+och plugin upgrade -i                       # 交互式选择升级
+och plugin upgrade @scope/plugin-a          # 升级指定插件
+och plugin upgrade foo bar -g               # 升级多个全局插件
 ```
 
-## `mycli123 plugins:inspect PLUGIN...`
-
-Displays installation properties of a plugin.
+输出示例：
 
 ```
-USAGE
-  $ mycli123 plugins inspect PLUGIN...
-
-ARGUMENTS
-  PLUGIN...  [default: .] Plugin to inspect.
-
-FLAGS
-  -h, --help     Show CLI help.
-  -v, --verbose
-
-GLOBAL FLAGS
-  --json  Format output as json.
-
-DESCRIPTION
-  Displays installation properties of a plugin.
-
-EXAMPLES
-  $ mycli123 plugins inspect myplugin
+┌───────────────────┬────────────┬────────────┬──────────┐
+│ 插件              │ 升级前版本  │ 升级后版本  │ 状态     │
+├───────────────────┼────────────┼────────────┼──────────┤
+│ @scope/plugin-a   │ 1.0.0      │ 1.2.0      │ ✅ 已升级 │
+│ plugin-b          │ —          │ —          │ ⏭️ 跳过   │
+└───────────────────┴────────────┴────────────┴──────────┘
 ```
 
-_See code: [@oclif/plugin-plugins](https://github.com/oclif/plugin-plugins/blob/v5.0.16/src/commands/plugins/inspect.ts)_
+## 配置文件
 
-## `mycli123 plugins install PLUGIN`
+工具会读取 opencode 的配置文件，支持两种来源：
 
-Installs a plugin into mycli123.
+### 项目级配置
 
-```
-USAGE
-  $ mycli123 plugins install PLUGIN... [--json] [-f] [-h] [-s | -v]
+在当前目录向上查找，按优先级依次查找：
 
-ARGUMENTS
-  PLUGIN...  Plugin to install.
+- `opencode.json`
+- `.opencode.json`
 
-FLAGS
-  -f, --force    Force npm to fetch remote resources even if a local copy exists on disk.
-  -h, --help     Show CLI help.
-  -s, --silent   Silences npm output.
-  -v, --verbose  Show verbose npm output.
+### 全局配置
 
-GLOBAL FLAGS
-  --json  Format output as json.
+| 平台 | 路径 |
+|------|------|
+| Linux | `$XDG_CONFIG_HOME/opencode/opencode.json` 或 `~/.config/opencode/opencode.json` |
+| macOS | `~/Library/Application Support/opencode/opencode.json` |
+| Windows | `%APPDATA%/opencode/opencode.json` |
 
-DESCRIPTION
-  Installs a plugin into mycli123.
+配置文件示例（支持 JSONC 注释）：
 
-  Uses bundled npm executable to install plugins into /Users/mdonnalley/.local/share/mycli123
-
-  Installation of a user-installed plugin will override a core plugin.
-
-  Use the MYCLI123_NPM_LOG_LEVEL environment variable to set the npm loglevel.
-  Use the MYCLI123_NPM_REGISTRY environment variable to set the npm registry.
-
-ALIASES
-  $ mycli123 plugins add
-
-EXAMPLES
-  Install a plugin from npm registry.
-
-    $ mycli123 plugins install myplugin
-
-  Install a plugin from a github url.
-
-    $ mycli123 plugins install https://github.com/someuser/someplugin
-
-  Install a plugin from a github slug.
-
-    $ mycli123 plugins install someuser/someplugin
+```jsonc
+{
+  "plugin": [
+    "@scope/plugin-a@1.0.0",         // npm 固定版本
+    "@scope/plugin-b@latest",        // npm 最新版本
+    "plugin-c@git+https://github.com/user/plugin-c.git"  // git 仓库
+  ]
+}
 ```
 
-_See code: [@oclif/plugin-plugins](https://github.com/oclif/plugin-plugins/blob/v5.0.16/src/commands/plugins/install.ts)_
+## 开发
 
-## `mycli123 plugins link PATH`
-
-Links a plugin into the CLI for development.
-
-```
-USAGE
-  $ mycli123 plugins link PATH [-h] [--install] [-v]
-
-ARGUMENTS
-  PATH  [default: .] path to plugin
-
-FLAGS
-  -h, --help          Show CLI help.
-  -v, --verbose
-      --[no-]install  Install dependencies after linking the plugin.
-
-DESCRIPTION
-  Links a plugin into the CLI for development.
-  Installation of a linked plugin will override a user-installed or core plugin.
-
-  e.g. If you have a user-installed or core plugin that has a 'hello' command, installing a linked plugin with a 'hello'
-  command will override the user-installed or core plugin implementation. This is useful for development work.
-
-
-EXAMPLES
-  $ mycli123 plugins link myplugin
+```bash
+pnpm install         # 安装依赖
+pnpm run build       # 编译 TypeScript
+pnpm run test        # 运行测试
+pnpm run lint        # ESLint 检查
+./bin/dev.js plugin list  # 开发模式运行命令
 ```
 
-_See code: [@oclif/plugin-plugins](https://github.com/oclif/plugin-plugins/blob/v5.0.16/src/commands/plugins/link.ts)_
+## License
 
-## `mycli123 plugins remove [PLUGIN]`
-
-Removes a plugin from the CLI.
-
-```
-USAGE
-  $ mycli123 plugins remove [PLUGIN...] [-h] [-v]
-
-ARGUMENTS
-  PLUGIN...  plugin to uninstall
-
-FLAGS
-  -h, --help     Show CLI help.
-  -v, --verbose
-
-DESCRIPTION
-  Removes a plugin from the CLI.
-
-ALIASES
-  $ mycli123 plugins unlink
-  $ mycli123 plugins remove
-
-EXAMPLES
-  $ mycli123 plugins remove myplugin
-```
-
-## `mycli123 plugins reset`
-
-Remove all user-installed and linked plugins.
-
-```
-USAGE
-  $ mycli123 plugins reset [--hard] [--reinstall]
-
-FLAGS
-  --hard       Delete node_modules and package manager related files in addition to uninstalling plugins.
-  --reinstall  Reinstall all plugins after uninstalling.
-```
-
-_See code: [@oclif/plugin-plugins](https://github.com/oclif/plugin-plugins/blob/v5.0.16/src/commands/plugins/reset.ts)_
-
-## `mycli123 plugins uninstall [PLUGIN]`
-
-Removes a plugin from the CLI.
-
-```
-USAGE
-  $ mycli123 plugins uninstall [PLUGIN...] [-h] [-v]
-
-ARGUMENTS
-  PLUGIN...  plugin to uninstall
-
-FLAGS
-  -h, --help     Show CLI help.
-  -v, --verbose
-
-DESCRIPTION
-  Removes a plugin from the CLI.
-
-ALIASES
-  $ mycli123 plugins unlink
-  $ mycli123 plugins remove
-
-EXAMPLES
-  $ mycli123 plugins uninstall myplugin
-```
-
-_See code: [@oclif/plugin-plugins](https://github.com/oclif/plugin-plugins/blob/v5.0.16/src/commands/plugins/uninstall.ts)_
-
-## `mycli123 plugins unlink [PLUGIN]`
-
-Removes a plugin from the CLI.
-
-```
-USAGE
-  $ mycli123 plugins unlink [PLUGIN...] [-h] [-v]
-
-ARGUMENTS
-  PLUGIN...  plugin to uninstall
-
-FLAGS
-  -h, --help     Show CLI help.
-  -v, --verbose
-
-DESCRIPTION
-  Removes a plugin from the CLI.
-
-ALIASES
-  $ mycli123 plugins unlink
-  $ mycli123 plugins remove
-
-EXAMPLES
-  $ mycli123 plugins unlink myplugin
-```
-
-## `mycli123 plugins update`
-
-Update installed plugins.
-
-```
-USAGE
-  $ mycli123 plugins update [-h] [-v]
-
-FLAGS
-  -h, --help     Show CLI help.
-  -v, --verbose
-
-DESCRIPTION
-  Update installed plugins.
-```
-
-_See code: [@oclif/plugin-plugins](https://github.com/oclif/plugin-plugins/blob/v5.0.16/src/commands/plugins/update.ts)_
-<!-- commandsstop -->
+MIT
