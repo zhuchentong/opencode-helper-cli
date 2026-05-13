@@ -1,13 +1,13 @@
 export interface OpenCodeConfig {
-  plugin?: string[]
   mcp?: Record<string, unknown>
+  plugin?: string[]
   provider?: Record<string, unknown>
 }
 
 export interface PluginInfo {
+  current: null | string
+  latest: null | string
   name: string
-  current: string | null
-  latest: string | null
 }
 
-export type ConfigSource = 'project' | 'global'
+export type ConfigSource = 'global' | 'project'
