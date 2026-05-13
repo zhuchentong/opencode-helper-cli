@@ -6,8 +6,8 @@ describe('plugin list', () => {
     const originalCwd = process.cwd()
     process.chdir('/tmp')
     try {
-      const {error} = await runCommand('plugin list')
-      expect(error?.message).to.include('No project opencode config found')
+      const {stdout} = await runCommand('plugin list')
+      expect(stdout).to.include('未找到插件配置')
     } finally {
       process.chdir(originalCwd)
     }

@@ -170,7 +170,7 @@ export interface UpgradeResult {
 /**
  * 升级单个插件到最新版本
  * npm 插件：在缓存目录执行 npm install <name>@latest
- * git 插件：在缓存目录执行 git pull && npm install
+ * git 插件：在缓存目录执行 npm install <name>@<git-url>
  * 固定版本的 npm 插件会被跳过
  */
 export async function upgradePlugin(ref: string, cacheDir?: string): Promise<UpgradeResult> {
@@ -203,9 +203,8 @@ export async function upgradePlugin(ref: string, cacheDir?: string): Promise<Upg
 
   try {
     if (parsed.type === 'git') {
-      // git 插件：先 git pull 再 npm install
-      await execFileAsync('git', ['pull'], {...execOptions, cwd: installDir})
-      await execFileAsync('npm', ['install'], {...execOptions, cwd: installDir})
+      // git 插件：通过 npm install 重新从 GitHub 拉取最新版本
+      await execFileAsync('npm', ['install', `${parsed.name}@${parsed.url}`], {...execOptions, cwd: installDir})
     } else {
       // npm 插件：安装最新版本
       await execFileAsync('npm', ['install', `${parsed.name}@latest`], {...execOptions, cwd: installDir})
