@@ -202,13 +202,8 @@ export async function upgradePlugin(ref: string, cacheDir?: string): Promise<Upg
   }
 
   try {
-    if (parsed.type === 'git') {
-      // git 插件：通过 npm install 重新从 GitHub 拉取最新版本
-      await execFileAsync('npm', ['install', `${parsed.name}@${parsed.url}`], {...execOptions, cwd: installDir})
-    } else {
-      // npm 插件：安装最新版本
-      await execFileAsync('npm', ['install', `${parsed.name}@latest`], {...execOptions, cwd: installDir})
-    }
+    // git 插件从 GitHub 拉取，npm 插件安装最新版本
+    await execFileAsync('npm', ['install', `${parsed.name}@${parsed.type === 'git' ? parsed.url : 'latest'}`], {...execOptions, cwd: installDir})
 
     const currentVersion = readInstalledVersion(parsed.name, installDir)
     return {

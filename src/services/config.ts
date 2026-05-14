@@ -6,7 +6,12 @@ import path from 'node:path'
 import type {OpenCodeConfig} from '../types.js'
 
 // 支持的项目配置文件名，按优先级排序
-const CONFIG_FILENAMES = ['opencode.json', '.opencode.json']
+const CONFIG_FILENAMES = [
+  'opencode.json',
+  'opencode.jsonc',
+  '.opencode.json',
+  '.opencode.jsonc'
+]
 
 /**
  * 获取平台相关的配置目录
