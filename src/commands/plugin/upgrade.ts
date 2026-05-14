@@ -59,32 +59,41 @@ export default class PluginUpgrade extends Command {
 
     const plugins = result.config.plugin!
 
-    // 交互式模式：列出插件供用户多选
-    if (flags.interactive) {
-      const targetRefs = await this.interactiveSelect(plugins)
-      if (targetRefs.length === 0) return
+    try {
+      // 交互式模式：列出插件供用户多选
+      if (flags.interactive) {
+        const targetRefs = await this.interactiveSelect(plugins)
+        if (targetRefs.length === 0) return
 
-      const results = await Promise.all(targetRefs.map((ref) => upgradePlugin(ref)))
+        const results = await Promise.all(targetRefs.map((ref) => upgradePlugin(ref)))
+        this.renderTable(results)
+        return
+      }
+
+      // 非交互模式：原有逻辑
+      const targetRefs = argv.length > 0
+        ? this.filterPlugins(plugins, argv as string[])
+        : plugins
+
+      if (targetRefs.length === 0) {
+        this.log('⚠️ 未找到匹配的插件。')
+        return
+      }
+
+      // 并行升级所有目标插件
+      const results = await Promise.all(
+        targetRefs.map((ref) => upgradePlugin(ref)),
+      )
+
       this.renderTable(results)
-      return
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'ExitPromptError') {
+        this.log(chalk.yellow('\n已取消。'))
+        this.exit(0)
+      }
+
+      throw error
     }
-
-    // 非交互模式：原有逻辑
-    const targetRefs = argv.length > 0
-      ? this.filterPlugins(plugins, argv as string[])
-      : plugins
-
-    if (targetRefs.length === 0) {
-      this.log('⚠️ 未找到匹配的插件。')
-      return
-    }
-
-    // 并行升级所有目标插件
-    const results = await Promise.all(
-      targetRefs.map((ref) => upgradePlugin(ref)),
-    )
-
-    this.renderTable(results)
   }
 
   /**

@@ -127,3 +127,13 @@ export function loadGlobalConfig(customPath?: string): null | OpenCodeConfig {
 export function loadProjectConfig(startDir?: string): null | OpenCodeConfig {
   return loadProjectConfigWithPath(startDir)?.config ?? null
 }
+
+/**
+ * 将配置对象写回文件
+ * @param filePath 配置文件路径
+ * @param config 配置对象
+ */
+export function saveConfig(filePath: string, config: OpenCodeConfig): void {
+  const content = JSON.stringify(config, null, 2) + '\n'
+  fs.writeFileSync(filePath, content, 'utf8')
+}

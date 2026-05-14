@@ -223,3 +223,21 @@ export async function upgradePlugin(ref: string, cacheDir?: string): Promise<Upg
     }
   }
 }
+
+/**
+ * 删除插件的缓存目录
+ * @param ref 插件引用字符串
+ * @param cacheDir 可选的自定义缓存目录
+ * @returns 是否成功删除（目录不存在也算成功）
+ */
+export function removePluginCache(ref: string, cacheDir?: string): {path: string; removed: boolean} {
+  const baseDir = cacheDir ?? getDefaultCacheDir()
+  const installDir = getPackageCacheDir(ref, baseDir)
+
+  if (fs.existsSync(installDir)) {
+    fs.rmSync(installDir, {force: true, recursive: true})
+    return {path: installDir, removed: true}
+  }
+
+  return {path: installDir, removed: false}
+}
