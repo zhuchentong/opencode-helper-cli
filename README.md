@@ -19,6 +19,9 @@ och plugin upgrade         # 升级所有项目级插件
 och plugin upgrade -g      # 升级所有全局插件
 och plugin upgrade -i      # 交互式选择要升级的插件
 och plugin upgrade <name>  # 升级指定插件
+och plugin remove <name>   # 删除指定插件
+och plugin remove -i       # 交互式选择要删除的插件
+och plugin remove -g       # 删除全局插件
 ```
 
 ## 命令
@@ -73,6 +76,35 @@ och plugin upgrade foo bar -g               # 升级多个全局插件
 │ @scope/plugin-a   │ 1.0.0      │ 1.2.0      │ ✅ 已升级 │
 │ plugin-b          │ —          │ —          │ ⏭️ 跳过   │
 └───────────────────┴────────────┴────────────┴──────────┘
+```
+
+### `och plugin remove`
+
+删除 opencode 插件，同时从配置文件中移除引用并清理缓存目录。
+
+| 标志 | 缩写 | 说明 |
+|------|------|------|
+| `--global` | `-g` | 删除全局插件 |
+| `--interactive` | `-i` | 交互式选择要删除的插件 |
+
+```bash
+och plugin remove <name>                    # 删除指定插件
+och plugin remove foo bar                   # 删除多个插件
+och plugin remove -g <name>                 # 删除全局插件
+och plugin remove -i                        # 交互式选择删除
+```
+
+输出示例：
+
+```
+即将删除以下插件：plugin-a, plugin-b
+? 确认删除？ Yes
+┌───────────────┬──────────┬──────────┐
+│ 插件          │ 缓存清理  │ 状态     │
+├───────────────┼──────────┼──────────┤
+│ plugin-a      │ 已清理    │ ✅ 已删除 │
+│ plugin-b      │ 无需清理  │ ✅ 已删除 │
+└───────────────┴──────────┴──────────┘
 ```
 
 ## 配置文件
