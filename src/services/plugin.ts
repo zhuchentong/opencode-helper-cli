@@ -24,6 +24,26 @@ function sanitizeForDir(spec: string): string {
 }
 
 /**
+ * 判断已解析的 ref 是否是「固定数字版本」——只有这种情况升级时才跳过。
+ * dist-tag（如 @latest / @beta / @next）虽然也带 `@<tag>`，但应该跑 `npm install <name>@<tag>` 升级。
+ */
+export function isFixedVersionRef(parsed: ParsedPluginRef): boolean {
+  if (parsed.type !== 'npm') return false
+  const {version} = parsed
+  if (!version) return false
+  return /^\d+\.\d+\.\d+/.test(version)
+}
+
+/**
+ * 返回平台对应的 npm 命令名。
+ * win32 上 Node 能直接 spawn .cmd 批处理文件，无需 shell:true，
+ * 这样避免 DEP0190 安全警告（shell:true 下 args 不转义，仅拼接）。
+ */
+export function getNpmCommand(): string {
+  return process.platform === 'win32' ? 'npm.cmd' : 'npm'
+}
+
+/**
  * Parses a plugin reference string into its components.
  * Supports npm packages (scoped, unscoped, versioned) and git references.
  */
@@ -98,9 +118,10 @@ function readInstalledVersion(parsed: ParsedPluginRef, installDir: string): null
 }
 
 /**
- * 跨平台 execFile 选项，仅在 Windows 上启用 shell（npm.cmd / git.cmd 需要）
+ * 跨平台 execFile 选项：直接 spawn npm.cmd (win32) / npm，Node 自动处理 .cmd 包装，
+ * 无需 shell:true，避免 DEP0190 安全警告（args 不转义）。
  */
-const execOptions = {shell: process.platform === 'win32', timeout: 60_000}
+const execOptions = {timeout: 60_000}
 
 /**
  * Queries the latest version of an npm package from the registry.
@@ -108,7 +129,7 @@ const execOptions = {shell: process.platform === 'win32', timeout: 60_000}
  */
 async function fetchLatestVersion(packageName: string): Promise<null | string> {
   try {
-    const {stdout} = await execFileAsync('npm', ['view', packageName, 'version'], {
+    const {stdout} = await execFileAsync(getNpmCommand(), ['view', packageName, 'version'], {
       ...execOptions,
       timeout: 15_000,
     })
@@ -187,8 +208,8 @@ export async function upgradePlugin(ref: string, cacheDir?: string): Promise<Upg
   const installDir = getPackageCacheDir(ref, baseDir)
   const previousVersion = readInstalledVersion(parsed, installDir)
 
-  // 固定版本的 npm 插件跳过升级
-  if (parsed.type === 'npm' && parsed.version) {
+  // 固定数字版本的 npm 插件跳过升级（dist-tag 如 @latest 应跑 npm install 升级到该 tag 当前指向的版本）
+  if (isFixedVersionRef(parsed)) {
     return {
       currentVersion: previousVersion,
       message: '固定版本，已跳过',
@@ -211,7 +232,7 @@ export async function upgradePlugin(ref: string, cacheDir?: string): Promise<Upg
 
   try {
     // git 插件从 GitHub 拉取，npm 插件安装最新版本
-    await execFileAsync('npm', ['install', `${parsed.name}@${parsed.type === 'git' ? parsed.url : 'latest'}`], {...execOptions, cwd: installDir})
+    await execFileAsync(getNpmCommand(), ['install', `${parsed.name}@${parsed.type === 'git' ? parsed.url : 'latest'}`], {...execOptions, cwd: installDir})
 
     const currentVersion = readInstalledVersion(parsed, installDir)
     return {

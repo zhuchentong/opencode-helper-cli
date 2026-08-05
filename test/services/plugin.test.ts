@@ -4,7 +4,9 @@ import os from 'node:os'
 import path from 'node:path'
 
 import {
+  getNpmCommand,
   getPlatformCacheDir,
+  isFixedVersionRef,
   parsePluginRef,
   resolvePluginInfo,
 } from '../../src/services/plugin.js'
@@ -69,6 +71,40 @@ describe('plugin service', () => {
         name: 'plugin',
         type: 'npm',
         version: 'beta',
+      })
+    })
+
+    describe('isFixedVersionRef', () => {
+      it('returns true for numeric version', () => {
+        expect(isFixedVersionRef(parsePluginRef('plugin@1.2.3'))).to.be.true
+      })
+
+      it('returns true for numeric version with prerelease', () => {
+        expect(isFixedVersionRef(parsePluginRef('plugin@1.2.3-beta.0'))).to.be.true
+      })
+
+      it('returns false for scoped package with @latest tag', () => {
+        // 用户的真实配置:`@plannotator/opencode@latest` 是 dist-tag,不是固定版本
+        expect(isFixedVersionRef(parsePluginRef('@plannotator/opencode@latest'))).to.be.false
+      })
+
+      it('returns false for unscoped package with @latest tag', () => {
+        expect(isFixedVersionRef(parsePluginRef('opencode-pty@latest'))).to.be.false
+      })
+
+      it('returns false for non-latest dist-tag', () => {
+        expect(isFixedVersionRef(parsePluginRef('plugin@beta'))).to.be.false
+        expect(isFixedVersionRef(parsePluginRef('plugin@next'))).to.be.false
+      })
+
+      it('returns false for plain ref without version', () => {
+        expect(isFixedVersionRef(parsePluginRef('plugin'))).to.be.false
+      })
+
+      it('returns false for git ref', () => {
+        expect(
+          isFixedVersionRef(parsePluginRef('superpowers@git+https://github.com/obra/superpowers.git')),
+        ).to.be.false
       })
     })
   })
@@ -188,6 +224,15 @@ describe('plugin service', () => {
       expect(getPlatformCacheDir()).to.equal(
         path.join(os.homedir(), '.cache', 'opencode'),
       )
+    })
+  })
+
+  describe('getNpmCommand', () => {
+    it('returns npm.cmd on win32 to avoid shell wrapper', () => {
+      // Node 在 win32 上能直接 spawn .cmd 批处理文件，无需 shell:true，
+      // 这样可避免 DEP0190 安全警告且参数不会被 shell 拼接
+      const expected = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+      expect(getNpmCommand()).to.equal(expected)
     })
   })
 })
