@@ -120,6 +120,30 @@ describe('plugin service', () => {
       const result = await resolvePluginInfo('@gopowerteam/opencode-commit', cacheDir)
       expect(result.current).to.equal('0.0.6')
     })
+
+    it('should resolve git plugin current version from opencode 1.x cache layout', async () => {
+      // opencode 把 git 包安装到：
+      //   <cache>/packages/<name>@<sanitized-gitUrl>
+      // path.join 会把 sanitized-gitUrl 里的 `//` 规范化成 `/`，
+      // 所以 installDir 已经下沉到 <cache>/<name>@<sanitized>//<host>/<owner>/<repo>
+      // package.json 在 installDir/node_modules/<name>/package.json
+      const ref = 'superpowers@git+https://github.com/obra/superpowers.git'
+      const gitUrl = 'git+https://github.com/obra/superpowers.git'
+      const sanitizedUrl =
+        process.platform === 'win32' ? 'git+https_//github.com/obra/superpowers.git' : gitUrl
+      // 用 path.join 与代码同款构建 installDir（`//` 在 path.join 里被规范化）
+      const installDir = path.join(cacheDir, `superpowers@${sanitizedUrl}`)
+      const pkgDir = path.join(installDir, 'node_modules', 'superpowers')
+      fs.mkdirSync(pkgDir, {recursive: true})
+      fs.writeFileSync(
+        path.join(pkgDir, 'package.json'),
+        JSON.stringify({name: 'superpowers', version: '5.1.0'}),
+      )
+
+      const result = await resolvePluginInfo(ref, cacheDir)
+      expect(result.name).to.equal('superpowers')
+      expect(result.current).to.equal('5.1.0')
+    })
   })
 
   describe('getPlatformCacheDir', () => {

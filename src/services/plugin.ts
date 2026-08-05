@@ -15,6 +15,14 @@ interface ParsedPluginRef {
   version?: string
 }
 
+// 与 opencode packages/core/src/npm.ts:sanitize 保持一致：仅在 win32 上替换路径非法字符，其他平台原样返回
+const illegalChars = process.platform === 'win32' ? new Set(['"', '*', ':', '<', '>', '?', '|']) : undefined
+
+function sanitizeForDir(spec: string): string {
+  if (!illegalChars) return spec
+  return Array.from(spec, (char) => (illegalChars.has(char) || char.codePointAt(0)! < 32 ? '_' : char)).join('')
+}
+
 /**
  * Parses a plugin reference string into its components.
  * Supports npm packages (scoped, unscoped, versioned) and git references.
@@ -45,22 +53,17 @@ export function parsePluginRef(ref: string): ParsedPluginRef {
 
 /**
  * Maps a plugin reference to its cache directory path.
- * 兼容旧版目录名格式（使用 :/ 替换 :// 的格式）。
+ * opencode 1.x 在 npm 缓存目录下，按 `<name>@<sanitized-spec>` 命名。
+ * win32 上 sanitize 替换 `:` 等路径非法字符为 `_`,非 win32 平台原样。
+ * 注意 `path.join` 会把 sanitized-spec 内部的 `//` 规范化为 `/`，
+ * 所以最终 installDir 已经下沉到 `<cache>/<name>@<sanitized-spec>/<host>/<owner>/<repo>`。
  */
 function getPackageCacheDir(ref: string, cacheBase: string): string {
   const parsed = parsePluginRef(ref)
 
-  if (parsed.type === 'git') {
-    // 新格式：将 :// 替换为 -（Windows 兼容，: 不能用于目录名）
-    const newUrlPart = parsed.url!.replace('://', '-')
-    const newDir = path.join(cacheBase, `${parsed.name}@${newUrlPart}`)
-
-    // 兼容旧格式：检查使用 :/ 替换的旧目录是否存在
-    const oldUrlPart = parsed.url!.replace('://', ':/')
-    const oldDir = path.join(cacheBase, `${parsed.name}@${oldUrlPart}`)
-    if (fs.existsSync(oldDir)) return oldDir
-
-    return newDir
+  if (parsed.type === 'git' && parsed.url) {
+    const sanitizedUrl = sanitizeForDir(parsed.url)
+    return path.join(cacheBase, `${parsed.name}@${sanitizedUrl}`)
   }
 
   if (parsed.version) {
@@ -71,11 +74,20 @@ function getPackageCacheDir(ref: string, cacheBase: string): string {
 }
 
 /**
+ * 计算 ref 在缓存目录下的 package.json 路径。
+ * opencode 1.x 的布局：所有类型都用 `installDir/node_modules/<name>/package.json`。
+ * 对 git 类型，`installDir` 本身已经下沉到 `<cache>/<name>@<sanitized-spec>/<host>/<owner>/<repo>`。
+ */
+function getInstalledPkgJsonPath(parsed: ParsedPluginRef, installDir: string): string {
+  return path.join(installDir, 'node_modules', parsed.name, 'package.json')
+}
+
+/**
  * Reads the installed version of a package from the cache directory.
  * Returns null if the package is not installed.
  */
-function readInstalledVersion(packageName: string, installDir: string): null | string {
-  const pkgJsonPath = path.join(installDir, 'node_modules', packageName, 'package.json')
+function readInstalledVersion(parsed: ParsedPluginRef, installDir: string): null | string {
+  const pkgJsonPath = getInstalledPkgJsonPath(parsed, installDir)
   try {
     const content = fs.readFileSync(pkgJsonPath, 'utf8')
     const pkg = JSON.parse(content) as {version?: string}
@@ -137,7 +149,7 @@ export async function resolvePluginInfo(ref: string, cacheDir?: string): Promise
   const baseDir = cacheDir ?? getDefaultCacheDir()
   const parsed = parsePluginRef(ref)
   const installDir = getPackageCacheDir(ref, baseDir)
-  const current = readInstalledVersion(parsed.name, installDir)
+  const current = readInstalledVersion(parsed, installDir)
   let latest: null | string = null
 
   // Only fetch latest version for npm packages
@@ -173,7 +185,7 @@ export async function upgradePlugin(ref: string, cacheDir?: string): Promise<Upg
   const baseDir = cacheDir ?? getDefaultCacheDir()
   const parsed = parsePluginRef(ref)
   const installDir = getPackageCacheDir(ref, baseDir)
-  const previousVersion = readInstalledVersion(parsed.name, installDir)
+  const previousVersion = readInstalledVersion(parsed, installDir)
 
   // 固定版本的 npm 插件跳过升级
   if (parsed.type === 'npm' && parsed.version) {
@@ -201,7 +213,7 @@ export async function upgradePlugin(ref: string, cacheDir?: string): Promise<Upg
     // git 插件从 GitHub 拉取，npm 插件安装最新版本
     await execFileAsync('npm', ['install', `${parsed.name}@${parsed.type === 'git' ? parsed.url : 'latest'}`], {...execOptions, cwd: installDir})
 
-    const currentVersion = readInstalledVersion(parsed.name, installDir)
+    const currentVersion = readInstalledVersion(parsed, installDir)
     return {
       currentVersion,
       name: parsed.name,
@@ -209,7 +221,7 @@ export async function upgradePlugin(ref: string, cacheDir?: string): Promise<Upg
       status: 'upgraded',
     }
   } catch (error) {
-    const currentVersion = readInstalledVersion(parsed.name, installDir)
+    const currentVersion = readInstalledVersion(parsed, installDir)
     return {
       currentVersion,
       message: error instanceof Error ? error.message : String(error),
