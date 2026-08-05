@@ -6,18 +6,19 @@ import path from 'node:path'
 import type {OpenCodeConfig} from '../types.js'
 
 // 支持的项目配置文件名，按优先级排序
-const CONFIG_FILENAMES = [
+// opencode 1.x 的项目级配置在 .opencode/ 子目录中（最高优先级以兼容新版），旧版的根目录文件保留作为回退
+const PROJECT_CONFIG_HINTS = [
+  '.opencode/opencode.json',
   'opencode.json',
   'opencode.jsonc',
   '.opencode.json',
-  '.opencode.jsonc'
-]
+  '.opencode.jsonc',
+] as const
 
 /**
- * 获取平台相关的配置目录
- * Linux: $XDG_CONFIG_HOME/opencode 或 ~/.config/opencode
- * macOS: ~/Library/Application Support/opencode
- * Windows: %APPDATA%/opencode
+ * 获取全局 opencode 配置目录。
+ * opencode 1.x 在所有平台（包括 Windows）都遵循 XDG 基础目录规范：
+ * `$XDG_CONFIG_HOME/opencode` → `~/.config/opencode`。
  */
 export function getPlatformConfigDir(): string {
   const xdgConfig = process.env.XDG_CONFIG_HOME
@@ -25,19 +26,7 @@ export function getPlatformConfigDir(): string {
     return path.join(xdgConfig, 'opencode')
   }
 
-  switch (process.platform) {
-    case 'darwin': {
-      return path.join(os.homedir(), 'Library', 'Application Support', 'opencode')
-    }
-
-    case 'win32': {
-      return path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'opencode')
-    }
-
-    default: {
-      return path.join(os.homedir(), '.config', 'opencode')
-    }
-  }
+  return path.join(os.homedir(), '.config', 'opencode')
 }
 
 /**
@@ -92,7 +81,7 @@ export function loadProjectConfigWithPath(startDir?: string): ConfigResult | nul
 
   // 向上遍历目录树直到根目录
   while (current !== root) {
-    for (const filename of CONFIG_FILENAMES) {
+    for (const filename of PROJECT_CONFIG_HINTS) {
       const filePath = path.join(current, filename)
       if (fs.existsSync(filePath)) {
         const config = parseConfig(filePath)
