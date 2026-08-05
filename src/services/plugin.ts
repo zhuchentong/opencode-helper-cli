@@ -100,29 +100,18 @@ async function fetchLatestVersion(packageName: string): Promise<null | string> {
 }
 
 /**
- * 获取平台相关的缓存目录
- * Linux: $XDG_CACHE_HOME 或 ~/.cache
- * macOS: ~/Library/Caches
- * Windows: %LOCALAPPDATA%
+ * 获取全局 opencode 缓存目录。
+ * opencode 1.x 在所有平台（包括 Windows）都遵循 XDG 基础目录规范：
+ * `$XDG_CACHE_HOME/opencode` → `~/.cache/opencode`。
  */
 export function getPlatformCacheDir(): string {
-  // 环境变量优先（主要针对 Linux XDG 规范）
+  // 环境变量优先（XDG 规范）
   const xdgCache = process.env.XDG_CACHE_HOME
-  if (xdgCache && path.isAbsolute(xdgCache)) return xdgCache
-
-  switch (process.platform) {
-    case 'darwin': {
-      return path.join(os.homedir(), 'Library', 'Caches', 'opencode')
-    }
-
-    case 'win32': {
-      return path.join(process.env.LOCALAPPDATA ?? path.join(os.homedir(), 'AppData', 'Local'), 'opencode')
-    }
-
-    default: {
-      return path.join(os.homedir(), '.cache', 'opencode')
-    }
+  if (xdgCache && path.isAbsolute(xdgCache)) {
+    return path.join(xdgCache, 'opencode')
   }
+
+  return path.join(os.homedir(), '.cache', 'opencode')
 }
 
 /**

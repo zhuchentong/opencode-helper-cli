@@ -10,14 +10,13 @@ const CONFIG_FILENAMES = [
   'opencode.json',
   'opencode.jsonc',
   '.opencode.json',
-  '.opencode.jsonc'
-]
+  '.opencode.jsonc',
+] as const
 
 /**
- * 获取平台相关的配置目录
- * Linux: $XDG_CONFIG_HOME/opencode 或 ~/.config/opencode
- * macOS: ~/Library/Application Support/opencode
- * Windows: %APPDATA%/opencode
+ * 获取全局 opencode 配置目录。
+ * opencode 1.x 在所有平台（包括 Windows）都遵循 XDG 基础目录规范：
+ * `$XDG_CONFIG_HOME/opencode` → `~/.config/opencode`。
  */
 export function getPlatformConfigDir(): string {
   const xdgConfig = process.env.XDG_CONFIG_HOME
@@ -25,19 +24,7 @@ export function getPlatformConfigDir(): string {
     return path.join(xdgConfig, 'opencode')
   }
 
-  switch (process.platform) {
-    case 'darwin': {
-      return path.join(os.homedir(), 'Library', 'Application Support', 'opencode')
-    }
-
-    case 'win32': {
-      return path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'opencode')
-    }
-
-    default: {
-      return path.join(os.homedir(), '.config', 'opencode')
-    }
-  }
+  return path.join(os.homedir(), '.config', 'opencode')
 }
 
 /**

@@ -3,7 +3,11 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import {parsePluginRef, resolvePluginInfo} from '../../src/services/plugin.js'
+import {
+  getPlatformCacheDir,
+  parsePluginRef,
+  resolvePluginInfo,
+} from '../../src/services/plugin.js'
 
 describe('plugin service', () => {
   describe('parsePluginRef', () => {
@@ -88,6 +92,51 @@ describe('plugin service', () => {
 
       const result = await resolvePluginInfo('@gopowerteam/opencode-commit', cacheDir)
       expect(result.current).to.equal('0.0.6')
+    })
+  })
+
+  describe('getPlatformCacheDir', () => {
+    const originalCacheHome = process.env.XDG_CACHE_HOME
+    const originalAppData = process.env.LOCALAPPDATA
+
+    afterEach(() => {
+      // 恢复原始环境变量，避免污染其他测试
+      if (originalCacheHome === undefined) {
+        delete process.env.XDG_CACHE_HOME
+      } else {
+        process.env.XDG_CACHE_HOME = originalCacheHome
+      }
+
+      if (originalAppData === undefined) {
+        delete process.env.LOCALAPPDATA
+      } else {
+        process.env.LOCALAPPDATA = originalAppData
+      }
+    })
+
+    it('returns $XDG_CACHE_HOME/opencode when XDG_CACHE_HOME is set', () => {
+      process.env.XDG_CACHE_HOME = path.join(os.tmpdir(), 'xdg-cache-fixture')
+      delete process.env.LOCALAPPDATA
+      expect(getPlatformCacheDir()).to.equal(
+        path.join(os.tmpdir(), 'xdg-cache-fixture', 'opencode'),
+      )
+    })
+
+    it('falls back to ~/.cache/opencode (XDG), not %LOCALAPPDATA%', () => {
+      delete process.env.XDG_CACHE_HOME
+      delete process.env.LOCALAPPDATA
+      expect(getPlatformCacheDir()).to.equal(
+        path.join(os.homedir(), '.cache', 'opencode'),
+      )
+    })
+
+    it('ignores non-absolute XDG_CACHE_HOME', () => {
+      // XDG 规范要求必须是绝对路径，相对路径应被忽略
+      process.env.XDG_CACHE_HOME = 'relative/cache'
+      delete process.env.LOCALAPPDATA
+      expect(getPlatformCacheDir()).to.equal(
+        path.join(os.homedir(), '.cache', 'opencode'),
+      )
     })
   })
 })
