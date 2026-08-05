@@ -32,6 +32,13 @@ export function parsePluginRef(ref: string): ParsedPluginRef {
     return {name: npmMatch[1], type: 'npm', version: npmMatch[2]}
   }
 
+  // npm dist-tag pattern: name@latest (or @beta / @next / @canary 等标签，字母起始且非数字版本号)
+  // 不能落在前面的数字版本分支上，所以放在它后面
+  const tagMatch = ref.match(/^(.+?)@([a-zA-Z][a-zA-Z0-9._-]{0,30})$/)
+  if (tagMatch) {
+    return {name: tagMatch[1], type: 'npm', version: tagMatch[2]}
+  }
+
   // plain npm package name
   return {name: ref, type: 'npm'}
 }

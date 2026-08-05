@@ -44,6 +44,33 @@ describe('plugin service', () => {
         version: '1.2.3',
       })
     })
+
+    it('should parse npm scoped package with @latest tag', () => {
+      const result = parsePluginRef('@plannotator/opencode@latest')
+      expect(result).to.deep.equal({
+        name: '@plannotator/opencode',
+        type: 'npm',
+        version: 'latest',
+      })
+    })
+
+    it('should parse npm package with @latest tag', () => {
+      const result = parsePluginRef('opencode-pty@latest')
+      expect(result).to.deep.equal({
+        name: 'opencode-pty',
+        type: 'npm',
+        version: 'latest',
+      })
+    })
+
+    it('should parse npm package with non-@latest tag', () => {
+      const result = parsePluginRef('plugin@beta')
+      expect(result).to.deep.equal({
+        name: 'plugin',
+        type: 'npm',
+        version: 'beta',
+      })
+    })
   })
 
   describe('resolvePluginInfo', () => {
