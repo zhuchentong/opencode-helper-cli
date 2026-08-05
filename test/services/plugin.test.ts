@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import {
-  getNpmCommand,
+  getNpmCliPath,
   getPlatformCacheDir,
   isFixedVersionRef,
   parsePluginRef,
@@ -227,12 +227,18 @@ describe('plugin service', () => {
     })
   })
 
-  describe('getNpmCommand', () => {
-    it('returns npm.cmd on win32 to avoid shell wrapper', () => {
-      // Node 在 win32 上能直接 spawn .cmd 批处理文件，无需 shell:true，
-      // 这样可避免 DEP0190 安全警告且参数不会被 shell 拼接
-      const expected = process.platform === 'win32' ? 'npm.cmd' : 'npm'
-      expect(getNpmCommand()).to.equal(expected)
+  describe('getNpmCliPath', () => {
+    it('resolves to an existing npm-cli.js path', () => {
+      const npmCliPath = getNpmCliPath()
+      expect(npmCliPath.endsWith('npm-cli.js')).to.be.true
+      expect(fs.existsSync(npmCliPath)).to.be.true
+    })
+
+    it('returns a path under the current node install directory', () => {
+      const execDir = path.dirname(process.execPath)
+      const npmCliPath = getNpmCliPath()
+      // 解析后的绝对路径应位于当前 node 安装目录下（允许 1~2 级父目录）
+      expect(npmCliPath.startsWith(execDir) || npmCliPath.startsWith(path.dirname(execDir))).to.be.true
     })
   })
 })

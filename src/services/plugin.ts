@@ -35,12 +35,31 @@ export function isFixedVersionRef(parsed: ParsedPluginRef): boolean {
 }
 
 /**
- * 返回平台对应的 npm 命令名。
- * win32 上 Node 能直接 spawn .cmd 批处理文件，无需 shell:true，
- * 这样避免 DEP0190 安全警告（shell:true 下 args 不转义，仅拼接）。
+ * 返回 npm 的 CLI 脚本路径，用于通过当前 node 直接调用 npm。
+ * 这样既避免 DEP0190 警告（无需 shell:true，args 不会被 shell 拼接），
+ * 又规避 Windows 上 spawn .cmd 文件必须 shell:true 否则 EINVAL 的限制。
+ *
+ * npm 通常与 node 一起安装，按以下顺序查找：
+ *   1. <node_dir>/node_modules/npm/bin/npm-cli.js             (Windows 标准安装)
+ *   2. <node_dir>/../lib/node_modules/npm/bin/npm-cli.js      (nvm、Linux/macOS 系统安装)
+ *   3. <node_dir>/../node_modules/npm/bin/npm-cli.js          (Linux 系统安装变体)
+ * 找不到时抛错，提示用户检查 node/npm 安装。
  */
-export function getNpmCommand(): string {
-  return process.platform === 'win32' ? 'npm.cmd' : 'npm'
+export function getNpmCliPath(): string {
+  const execDir = path.dirname(process.execPath)
+  const candidates = [
+    path.join(execDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    path.join(execDir, '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    path.join(execDir, '..', 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+  ]
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate
+  }
+
+  throw new Error(
+    `无法定位 npm CLI。已尝试以下路径：\n${candidates.join('\n')}\n请确认 npm 与 node 一起安装在同一目录下。`,
+  )
 }
 
 /**
@@ -118,8 +137,9 @@ function readInstalledVersion(parsed: ParsedPluginRef, installDir: string): null
 }
 
 /**
- * 跨平台 execFile 选项：直接 spawn npm.cmd (win32) / npm，Node 自动处理 .cmd 包装，
- * 无需 shell:true，避免 DEP0190 安全警告（args 不转义）。
+ * 跨平台 execFile 选项：直接调用当前 node + npm-cli.js（路径由 getNpmCliPath 解析），
+ * 既无需 shell:true（避免 DEP0190 安全警告），又规避 Windows 上 spawn .cmd 文件
+ * 必须 shell:true 否则 EINVAL 的限制。args 由 execFile 数组形式传递，不会被 shell 拼接。
  */
 const execOptions = {timeout: 60_000}
 
@@ -129,10 +149,11 @@ const execOptions = {timeout: 60_000}
  */
 async function fetchLatestVersion(packageName: string): Promise<null | string> {
   try {
-    const {stdout} = await execFileAsync(getNpmCommand(), ['view', packageName, 'version'], {
-      ...execOptions,
-      timeout: 15_000,
-    })
+    const {stdout} = await execFileAsync(
+      process.execPath,
+      [getNpmCliPath(), 'view', packageName, 'version'],
+      {...execOptions, timeout: 15_000},
+    )
     return stdout.trim() || null
   } catch {
     return null
@@ -232,7 +253,11 @@ export async function upgradePlugin(ref: string, cacheDir?: string): Promise<Upg
 
   try {
     // git 插件从 GitHub 拉取，npm 插件安装最新版本
-    await execFileAsync(getNpmCommand(), ['install', `${parsed.name}@${parsed.type === 'git' ? parsed.url : 'latest'}`], {...execOptions, cwd: installDir})
+    await execFileAsync(
+      process.execPath,
+      [getNpmCliPath(), 'install', `${parsed.name}@${parsed.type === 'git' ? parsed.url : 'latest'}`],
+      {...execOptions, cwd: installDir},
+    )
 
     const currentVersion = readInstalledVersion(parsed, installDir)
     return {
