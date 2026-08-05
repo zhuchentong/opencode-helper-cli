@@ -92,6 +92,24 @@ describe('config service', () => {
       expect(result!.plugin).to.deep.equal(['test-plugin'])
     })
 
+    it('should prefer .opencode/opencode.json over legacy root files', () => {
+      // opencode 1.x 把项目级配置放到 .opencode/opencode.json
+      const projectDir = path.join(fixturesDir, 'project-new-style')
+      fs.mkdirSync(path.join(projectDir, '.opencode'), {recursive: true})
+      fs.writeFileSync(
+        path.join(projectDir, '.opencode', 'opencode.json'),
+        `{"plugin": ["new-style-plugin"]}`,
+      )
+      // 仍然存在的旧位置，必须被新位置覆盖
+      fs.writeFileSync(
+        path.join(projectDir, 'opencode.json'),
+        `{"plugin": ["legacy-plugin"]}`,
+      )
+      const result = loadProjectConfig(projectDir)
+      expect(result).to.not.be.null
+      expect(result!.plugin).to.deep.equal(['new-style-plugin'])
+    })
+
     it('should search parent directories', () => {
       const rootDir = path.join(fixturesDir, 'project-c')
       const subDir = path.join(rootDir, 'sub', 'deep')

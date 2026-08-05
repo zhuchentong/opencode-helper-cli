@@ -6,7 +6,9 @@ import path from 'node:path'
 import type {OpenCodeConfig} from '../types.js'
 
 // 支持的项目配置文件名，按优先级排序
-const CONFIG_FILENAMES = [
+// opencode 1.x 的项目级配置在 .opencode/ 子目录中（最高优先级以兼容新版），旧版的根目录文件保留作为回退
+const PROJECT_CONFIG_HINTS = [
+  '.opencode/opencode.json',
   'opencode.json',
   'opencode.jsonc',
   '.opencode.json',
@@ -79,7 +81,7 @@ export function loadProjectConfigWithPath(startDir?: string): ConfigResult | nul
 
   // 向上遍历目录树直到根目录
   while (current !== root) {
-    for (const filename of CONFIG_FILENAMES) {
+    for (const filename of PROJECT_CONFIG_HINTS) {
       const filePath = path.join(current, filename)
       if (fs.existsSync(filePath)) {
         const config = parseConfig(filePath)
