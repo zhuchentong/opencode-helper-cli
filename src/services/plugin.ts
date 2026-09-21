@@ -140,8 +140,12 @@ function readInstalledVersion(parsed: ParsedPluginRef, installDir: string): null
  * 跨平台 execFile 选项：直接调用当前 node + npm-cli.js（路径由 getNpmCliPath 解析），
  * 既无需 shell:true（避免 DEP0190 安全警告），又规避 Windows 上 spawn .cmd 文件
  * 必须 shell:true 否则 EINVAL 的限制。args 由 execFile 数组形式传递，不会被 shell 拼接。
+ *
+ * timeout 设为 3 分钟：`@hueyexe/opencode-ensemble` 等依赖 400+ 的插件在新机器冷启动
+ * 时 `npm install` 经常跑到 50–60s，60s 超时极易被 SIGTERM 误判为失败（信号 SIGTERM、
+ * code null、killed true），需留出余量。
  */
-const execOptions = {timeout: 60_000}
+const execOptions = {timeout: 180_000}
 
 /**
  * Queries the latest version of an npm package from the registry.
