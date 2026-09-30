@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import {loadGlobalConfig, loadGlobalConfigWithPath, loadProjectConfig, saveConfig} from '../../src/services/config.js'
+import {describeConfigLocations, getPlatformConfigDir, loadGlobalConfig, loadGlobalConfigWithPath, loadProjectConfig, loadProjectConfigWithPath, saveConfig} from '../../src/services/config.js'
 
 describe('config service', () => {
   const fixturesDir = path.join(os.tmpdir(), 'och-test-fixtures')
@@ -15,6 +15,40 @@ describe('config service', () => {
 
   after(() => {
     fs.rmSync(fixturesDir, {force: true, recursive: true})
+  })
+
+  describe('getPlatformConfigDir', () => {
+    // 保存/恢复相关环境变量，避免污染其他测试
+    const envKeys = ['XDG_CONFIG_HOME', 'OPENCODE_CONFIG_DIR'] as const
+    const saved: Record<string, string | undefined> = {}
+
+    beforeEach(() => {
+      for (const key of envKeys) {
+        saved[key] = process.env[key]
+        delete process.env[key]
+      }
+    })
+
+    afterEach(() => {
+      for (const key of envKeys) {
+        if (saved[key] === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = saved[key]
+        }
+      }
+    })
+
+    it('should fall back to ~/.config/opencode when XDG_CONFIG_HOME is unset', () => {
+      // 固化跨平台契约：与 opencode v2 的 xdg-basedir 行为一致
+      expect(getPlatformConfigDir()).to.equal(path.join(os.homedir(), '.config', 'opencode'))
+    })
+
+    it('should prefer OPENCODE_CONFIG_DIR as the whole config directory', () => {
+      const dir = path.join(fixturesDir, 'flag-config-dir')
+      process.env.OPENCODE_CONFIG_DIR = dir
+      expect(getPlatformConfigDir()).to.equal(dir)
+    })
   })
 
   describe('loadGlobalConfig', () => {
@@ -57,11 +91,14 @@ describe('config service', () => {
 
   describe('loadGlobalConfigWithPath 多候选查找', () => {
     let originalXdg: string | undefined
+    let originalFlagDir: string | undefined
     let globalRoot: string
 
     beforeEach(() => {
       // 通过 XDG_CONFIG_HOME 隔离平台配置目录，避免读取开发者真实全局配置
       originalXdg = process.env.XDG_CONFIG_HOME
+      originalFlagDir = process.env.OPENCODE_CONFIG_DIR
+      delete process.env.OPENCODE_CONFIG_DIR
       globalRoot = path.join(fixturesDir, 'global-home')
       fs.rmSync(globalRoot, {force: true, recursive: true})
       fs.mkdirSync(path.join(globalRoot, 'opencode'), {recursive: true})
@@ -75,6 +112,12 @@ describe('config service', () => {
       } else {
         process.env.XDG_CONFIG_HOME = originalXdg
       }
+
+      if (originalFlagDir === undefined) {
+        delete process.env.OPENCODE_CONFIG_DIR
+      } else {
+        process.env.OPENCODE_CONFIG_DIR = originalFlagDir
+      }
     })
 
     it('should find opencode.jsonc when only jsonc variant exists', () => {
@@ -86,10 +129,30 @@ describe('config service', () => {
       expect(result!.config.plugin).to.deep.equal(['jsonc-only'])
     })
 
-    it('should prefer opencode.json over opencode.jsonc when both exist', () => {
+    it('should prefer opencode.jsonc over opencode.json when both exist', () => {
+      // v2 语义：loadGlobal 合并三文件时 opencode.jsonc 优先级最高，och 取最高优先文件
       const configDir = path.join(globalRoot, 'opencode')
       fs.writeFileSync(path.join(configDir, 'opencode.json'), '{"plugin": ["plain-json"]}')
       fs.writeFileSync(path.join(configDir, 'opencode.jsonc'), '{"plugin": ["jsonc"]}')
+      const result = loadGlobalConfigWithPath()
+      expect(result).to.not.be.null
+      expect(result!.path).to.equal(path.join(configDir, 'opencode.jsonc'))
+      expect(result!.config.plugin).to.deep.equal(['jsonc'])
+    })
+
+    it('should find config.json as the last global candidate', () => {
+      const configDir = path.join(globalRoot, 'opencode')
+      fs.writeFileSync(path.join(configDir, 'config.json'), '{"plugin": ["legacy-config"]}')
+      const result = loadGlobalConfigWithPath()
+      expect(result).to.not.be.null
+      expect(result!.path).to.equal(path.join(configDir, 'config.json'))
+      expect(result!.config.plugin).to.deep.equal(['legacy-config'])
+    })
+
+    it('should prefer opencode.json over config.json when both exist', () => {
+      const configDir = path.join(globalRoot, 'opencode')
+      fs.writeFileSync(path.join(configDir, 'opencode.json'), '{"plugin": ["plain-json"]}')
+      fs.writeFileSync(path.join(configDir, 'config.json'), '{"plugin": ["legacy-config"]}')
       const result = loadGlobalConfigWithPath()
       expect(result).to.not.be.null
       expect(result!.path).to.equal(path.join(configDir, 'opencode.json'))
@@ -105,6 +168,32 @@ describe('config service', () => {
       expect(result).to.not.be.null
       expect(result!.path).to.equal(customPath)
       expect(result!.config.plugin).to.deep.equal(['custom'])
+    })
+
+    it('should respect OPENCODE_CONFIG_DIR over platform config dir', () => {
+      const flagDir = path.join(fixturesDir, 'flag-global')
+      fs.mkdirSync(flagDir, {recursive: true})
+      fs.writeFileSync(path.join(flagDir, 'opencode.json'), '{"plugin": ["flag-dir"]}')
+      process.env.OPENCODE_CONFIG_DIR = flagDir
+      const result = loadGlobalConfigWithPath()
+      expect(result).to.not.be.null
+      expect(result!.path).to.equal(path.join(flagDir, 'opencode.json'))
+      expect(result!.config.plugin).to.deep.equal(['flag-dir'])
+    })
+  })
+
+  describe('describeConfigLocations', () => {
+    it('should list global candidates including config.json', () => {
+      const text = describeConfigLocations(true)
+      expect(text).to.include('opencode.jsonc')
+      expect(text).to.include('config.json')
+    })
+
+    it('should list project candidates', () => {
+      const text = describeConfigLocations(false)
+      expect(text).to.include('opencode.jsonc')
+      expect(text).to.include('.opencode.jsonc')
+      expect(text).to.include('.opencode/opencode.json')
     })
   })
 
@@ -164,6 +253,60 @@ describe('config service', () => {
       fs.mkdirSync(emptyDir, {recursive: true})
       const result = loadProjectConfig(emptyDir)
       expect(result).to.be.null
+    })
+
+    it('should find .opencode/opencode.json in project directory', () => {
+      const projectRoot = path.join(fixturesDir, 'opencode-dir-proj')
+      fs.rmSync(projectRoot, {force: true, recursive: true})
+      fs.mkdirSync(path.join(projectRoot, '.opencode'), {recursive: true})
+      fs.writeFileSync(
+        path.join(projectRoot, '.opencode', 'opencode.json'),
+        '{"plugin": ["in-dir"]}',
+      )
+      const result = loadProjectConfigWithPath(projectRoot)
+      expect(result).to.not.be.null
+      expect(result!.path).to.equal(path.join(projectRoot, '.opencode', 'opencode.json'))
+      expect(result!.config.plugin).to.deep.equal(['in-dir'])
+    })
+
+    it('should prefer direct config declaring plugin keys over .opencode config without them', () => {
+      // 单文件模型关键规则：同层优先选择声明了插件键的文件，避免漏配
+      const projectRoot = path.join(fixturesDir, 'plugin-key-pref')
+      fs.rmSync(projectRoot, {force: true, recursive: true})
+      fs.mkdirSync(path.join(projectRoot, '.opencode'), {recursive: true})
+      fs.writeFileSync(path.join(projectRoot, 'opencode.json'), '{"plugin": ["direct"]}')
+      fs.writeFileSync(
+        path.join(projectRoot, '.opencode', 'opencode.json'),
+        '{"model": "x"}',
+      )
+      const result = loadProjectConfigWithPath(projectRoot)
+      expect(result).to.not.be.null
+      expect(result!.path).to.equal(path.join(projectRoot, 'opencode.json'))
+      expect(result!.config.plugin).to.deep.equal(['direct'])
+    })
+
+    it('should prefer .opencode config over direct config when neither declares plugin keys', () => {
+      // v2 合并语义：.opencode 覆盖直连文件，无插件键时保持该优先级
+      const projectRoot = path.join(fixturesDir, 'no-key-order')
+      fs.rmSync(projectRoot, {force: true, recursive: true})
+      fs.mkdirSync(path.join(projectRoot, '.opencode'), {recursive: true})
+      fs.writeFileSync(path.join(projectRoot, 'opencode.json'), '{"model": "direct"}')
+      fs.writeFileSync(path.join(projectRoot, '.opencode', 'opencode.json'), '{"model": "in-dir"}')
+      const result = loadProjectConfigWithPath(projectRoot)
+      expect(result).to.not.be.null
+      expect(result!.path).to.equal(path.join(projectRoot, '.opencode', 'opencode.json'))
+    })
+
+    it('should prefer .opencode config when both declare plugin keys', () => {
+      const projectRoot = path.join(fixturesDir, 'both-keys-order')
+      fs.rmSync(projectRoot, {force: true, recursive: true})
+      fs.mkdirSync(path.join(projectRoot, '.opencode'), {recursive: true})
+      fs.writeFileSync(path.join(projectRoot, 'opencode.json'), '{"plugin": ["direct"]}')
+      fs.writeFileSync(path.join(projectRoot, '.opencode', 'opencode.json'), '{"plugin": ["in-dir"]}')
+      const result = loadProjectConfigWithPath(projectRoot)
+      expect(result).to.not.be.null
+      expect(result!.path).to.equal(path.join(projectRoot, '.opencode', 'opencode.json'))
+      expect(result!.config.plugin).to.deep.equal(['in-dir'])
     })
 
     it('should find opencode.json in current directory', () => {

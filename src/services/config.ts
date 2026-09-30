@@ -5,8 +5,10 @@ import path from 'node:path'
 
 import type {OpenCodeConfig} from '../types.js'
 
-// 支持的项目配置文件名，按优先级排序
-const CONFIG_FILENAMES = [
+// 项目级每层目录候选（相对路径）：.opencode 内文件 > 直连 > 隐藏（对齐 v2 合并覆盖顺序）
+const PROJECT_LAYER_CANDIDATES = [
+  '.opencode/opencode.json',
+  '.opencode/opencode.jsonc',
   'opencode.json',
   'opencode.jsonc',
   '.opencode.json',
@@ -15,33 +17,25 @@ const CONFIG_FILENAMES = [
 
 // 全局配置目录下的候选文件名，按优先级排序
 // 参见官方文档：https://opencode.ai/docs/config/
-const GLOBAL_CONFIG_FILENAMES = ['opencode.json', 'opencode.jsonc']
+// 全局配置文件候选名（对齐 opencode v2 config.ts:141，jsonc 优先级最高）
+const GLOBAL_CONFIG_FILENAMES = ['opencode.jsonc', 'opencode.json', 'config.json']
 
 /**
  * 获取平台相关的配置目录
- * Linux: $XDG_CONFIG_HOME/opencode 或 ~/.config/opencode
- * macOS: ~/Library/Application Support/opencode
- * Windows: %APPDATA%/opencode
+ * OPENCODE_CONFIG_DIR 优先（对齐 opencode v2：Flag.OPENCODE_CONFIG_DIR ?? Path.config）
+ * 其余情况与 opencode v2 的 xdg-basedir 行为一致：
+ * $XDG_CONFIG_HOME/opencode，fallback 到全平台统一的 ~/.config/opencode
  */
 export function getPlatformConfigDir(): string {
+  const flagConfigDir = process.env.OPENCODE_CONFIG_DIR
+  if (flagConfigDir && path.isAbsolute(flagConfigDir)) return flagConfigDir
+
   const xdgConfig = process.env.XDG_CONFIG_HOME
   if (xdgConfig && path.isAbsolute(xdgConfig)) {
     return path.join(xdgConfig, 'opencode')
   }
 
-  switch (process.platform) {
-    case 'darwin': {
-      return path.join(os.homedir(), 'Library', 'Application Support', 'opencode')
-    }
-
-    case 'win32': {
-      return path.join(process.env.APPDATA ?? path.join(os.homedir(), 'AppData', 'Roaming'), 'opencode')
-    }
-
-    default: {
-      return path.join(os.homedir(), '.config', 'opencode')
-    }
-  }
+  return path.join(os.homedir(), '.config', 'opencode')
 }
 
 /**
@@ -92,8 +86,8 @@ export function describeConfigLocations(global: boolean): string {
     return joinCandidates(GLOBAL_CONFIG_FILENAMES.map((filename) => path.join(getPlatformConfigDir(), filename)))
   }
 
-  // 项目级：从当前目录向上查找的候选文件名
-  return joinCandidates([...CONFIG_FILENAMES])
+  // 项目级：从当前目录向上查找的每层候选文件（含 .opencode 目录内文件）
+  return joinCandidates([...PROJECT_LAYER_CANDIDATES])
 }
 
 /**
@@ -125,13 +119,8 @@ export function loadProjectConfigWithPath(startDir?: string): ConfigResult | nul
 
   // 向上遍历目录树直到根目录
   while (current !== root) {
-    for (const filename of CONFIG_FILENAMES) {
-      const filePath = path.join(current, filename)
-      if (fs.existsSync(filePath)) {
-        const config = parseConfig(filePath)
-        if (config) return {config, path: filePath}
-      }
-    }
+    const found = findInLayer(current)
+    if (found) return found
 
     const parent = path.dirname(current)
     // 防止无限循环
@@ -140,6 +129,35 @@ export function loadProjectConfigWithPath(startDir?: string): ConfigResult | nul
   }
 
   return null
+}
+
+/**
+ * 在单层目录内查找配置
+ * 优先返回声明了 plugin/plugins 键的文件（避免漏配插件）；
+ * 同层全部含或全部不含插件键时，按候选顺序（.opencode 内 > 直连 > 隐藏）取第一个
+ */
+function findInLayer(dir: string): ConfigResult | null {
+  let fallback: ConfigResult | null = null
+
+  for (const relative of PROJECT_LAYER_CANDIDATES) {
+    const filePath = path.join(dir, relative)
+    if (!fs.existsSync(filePath)) continue
+
+    const config = parseConfig(filePath)
+    if (!config) continue
+
+    // 声明了插件键的文件优先于候选顺序
+    if (hasPluginKeys(config)) return {config, path: filePath}
+
+    if (fallback === null) fallback = {config, path: filePath}
+  }
+
+  return fallback
+}
+
+// 是否声明了插件键（plugin 或 plugins）
+function hasPluginKeys(config: OpenCodeConfig): boolean {
+  return Array.isArray(config.plugin) || Array.isArray(config.plugins)
 }
 
 /**
