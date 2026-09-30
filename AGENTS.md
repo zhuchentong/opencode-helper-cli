@@ -46,4 +46,4 @@ pnpm run prepack        # 生成 oclif manifest 和 README
 - TypeScript 配置为 `"module": "Node16"`、`"moduleResolution": "node16"`，需使用文件扩展名的相对导入（如 `import foo from './foo.js'`）
 - `tsconfig.json` 的 `rootDir` 为 `src`，不要将非源码文件放入 `src/`
 - CI 在 ubuntu 和 windows 上跨 Node LTS 版本运行测试，注意路径分隔符兼容性
-- 发布流程：推送 main → 自动创建 GitHub Release → 自动发布到 npm
+- 发布流程：`pnpm release`（bumpp 修改版本并推送 tag）→ push tag `v*` 触发 `.github/workflows/publish.yml` 自动发布到 npm 并创建 GitHub Release（npmjs 已配置 Trusted Publishing/OIDC，工作流文件名必须保持 `publish.yml`，无需 NPM_TOKEN）

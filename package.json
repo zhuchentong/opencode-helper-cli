@@ -1,7 +1,7 @@
 {
   "name": "opencode-helper-cli",
   "description": "CLI tool for managing opencode plugins",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "author": "zhuchentong",
   "bin": {
     "och": "./bin/run.js"
@@ -67,6 +67,7 @@
     }
   },
   "repository": "zhuchentong/opencode-helper-cli",
+  "packageManager": "pnpm@12.4.2",
   "scripts": {
     "build": "tsdown",
     "lint": "eslint",

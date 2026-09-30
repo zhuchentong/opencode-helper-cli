@@ -1,0 +1,49 @@
+name: Publish
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  # 创建 GitHub Release
+  contents: write
+  # npm Trusted Publishing（OIDC）需要
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 24 内置 npm 11.x，满足 Trusted Publishing 的最低版本要求
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建
+        run: pnpm run build
+
+      - name: 测试（posttest 自动执行 lint）
+        run: pnpm run test
+
+      - name: 生成 oclif manifest
+        run: pnpm run prepack
+
+      # Trusted Publishing 要求 npm >= 11.5.1，显式升级确保满足
+      - name: 升级 npm
+        run: npm install -g npm@latest
+
+      - name: 发布到 npm（OIDC，无需 token）
+        run: npm publish --provenance
+
+      - name: 创建 GitHub Release
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
