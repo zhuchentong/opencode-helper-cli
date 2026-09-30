@@ -3,10 +3,11 @@ import {Args, Command, Flags} from '@oclif/core'
 import chalk from 'chalk'
 import Table from 'cli-table3'
 
-import type {OpenCodeConfig} from '../../types.js'
+import type {NormalizedEntry} from '../../services/plugin.js'
+import type {OpenCodeConfig, PluginEntry} from '../../types.js'
 
 import {describeConfigLocations, loadGlobalConfigWithPath, loadProjectConfigWithPath, saveConfig} from '../../services/config.js'
-import {parsePluginRef, removePluginCache} from '../../services/plugin.js'
+import {normalizePluginEntries, parsePluginRef, readPluginEntries, removePluginCache, removePluginRefs} from '../../services/plugin.js'
 
 interface RemoveResult {
   cacheRemoved: boolean
@@ -48,7 +49,11 @@ export default class PluginRemove extends Command {
 
     const result = flags.global ? loadGlobalConfigWithPath() : loadProjectConfigWithPath()
 
-    if (!result || !result.config.plugin || result.config.plugin.length === 0) {
+    // 双键读取（plugin/plugins）并归一化条目，仅管理可解析条目
+    const entries = result ? normalizePluginEntries(readPluginEntries(result.config).raw) : []
+    const managed = entries.filter((entry) => entry.managed)
+
+    if (!result || entries.length === 0) {
       const scope = flags.global ? '全局' : '项目级'
       if (result) {
         this.log(chalk.yellow(`⚠️ 未找到${scope}插件配置（配置文件：${result.path}）`))
@@ -60,20 +65,23 @@ export default class PluginRemove extends Command {
       return
     }
 
-    const plugins = result.config.plugin!
+    if (managed.length === 0) {
+      this.log(chalk.yellow('⚠️ 配置中没有可管理的插件条目（未识别条目已保留）。'))
+      return
+    }
 
     try {
       if (flags.interactive) {
-        const targetRefs = await this.interactiveSelect(plugins)
-        if (targetRefs.length === 0) return
+        const targetEntries = await this.interactiveSelect(managed)
+        if (targetEntries.length === 0) return
 
-        const confirmed = await this.confirmRemoval(targetRefs)
+        const confirmed = await this.confirmRemoval(targetEntries.map((entry) => entry.name!))
         if (!confirmed) {
           this.log(chalk.yellow('已取消删除。'))
           return
         }
 
-        await this.executeRemove(result, targetRefs)
+        await this.executeRemove(result, targetEntries)
         return
       }
 
@@ -82,19 +90,19 @@ export default class PluginRemove extends Command {
         return
       }
 
-      const targetRefs = this.filterPlugins(plugins, argv as string[])
-      if (targetRefs.length === 0) {
+      const targetEntries = this.filterPlugins(managed, argv as string[])
+      if (targetEntries.length === 0) {
         this.log('⚠️ 未找到匹配的插件。')
         return
       }
 
-      const confirmed = await this.confirmRemoval(targetRefs)
+      const confirmed = await this.confirmRemoval(targetEntries.map((entry) => entry.name!))
       if (!confirmed) {
         this.log(chalk.yellow('已取消删除。'))
         return
       }
 
-      await this.executeRemove(result, targetRefs)
+      await this.executeRemove(result, targetEntries)
     } catch (error: unknown) {
       if (error instanceof Error && error.name === 'ExitPromptError') {
         this.log(chalk.yellow('\n已取消。'))
@@ -119,17 +127,21 @@ export default class PluginRemove extends Command {
    */
   private async executeRemove(
     configResult: {config: OpenCodeConfig; path: string},
-    targetRefs: string[],
+    targetEntries: NormalizedEntry[],
   ): Promise<void> {
     const results: RemoveResult[] = []
 
-    configResult.config.plugin = configResult.config.plugin!.filter(
-      (ref) => !targetRefs.includes(ref),
-    )
+    // 从权威键移除条目（未识别条目原样保留）
+    const outcome = removePluginRefs(configResult.config, targetEntries.map((entry) => entry.name!))
+    if (outcome.key === 'plugin') {
+      configResult.config.plugin = outcome.remaining as string[]
+    } else {
+      configResult.config.plugins = outcome.remaining as PluginEntry[]
+    }
 
-    for (const ref of targetRefs) {
-      const parsed = parsePluginRef(ref)
-      const cacheResult = removePluginCache(ref)
+    for (const entry of targetEntries) {
+      const parsed = parsePluginRef(entry.ref!)
+      const cacheResult = removePluginCache(entry.ref!)
       results.push({
         cacheRemoved: cacheResult.removed,
         name: parsed.name,
@@ -151,15 +163,12 @@ export default class PluginRemove extends Command {
   }
 
   /**
-   * 根据名称筛选配置中的插件引用
+   * 根据名称筛选配置中的插件条目（支持名称或完整引用匹配）
    */
-  private filterPlugins(allRefs: string[], names: string[]): string[] {
-    const matched: string[] = []
+  private filterPlugins(managed: NormalizedEntry[], names: string[]): NormalizedEntry[] {
+    const matched: NormalizedEntry[] = []
     for (const name of names) {
-      const found = allRefs.find((ref) => {
-        const parsed = parsePluginRef(ref)
-        return parsed.name === name || ref === name
-      })
+      const found = managed.find((entry) => entry.name === name || entry.ref === name)
       if (found) {
         matched.push(found)
       } else {
@@ -173,21 +182,17 @@ export default class PluginRemove extends Command {
   /**
    * 交互式选择要删除的插件
    */
-  private async interactiveSelect(plugins: string[]): Promise<string[]> {
-    const choices = plugins.map((ref) => {
-      const parsed = parsePluginRef(ref)
-      return {
-        name: parsed.name,
-        value: ref,
-      }
-    })
-
+  private async interactiveSelect(managed: NormalizedEntry[]): Promise<NormalizedEntry[]> {
     const selected = await checkbox({
-      choices,
+      choices: managed.map((entry) => ({
+        name: entry.name!,
+        value: entry.name!,
+      })),
       message: '🗑️ 选择要删除的插件（空格选择，回车确认）',
     })
 
-    return selected
+    // 同名条目一并选中
+    return managed.filter((entry) => selected.includes(entry.name!))
   }
 
   /**

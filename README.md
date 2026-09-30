@@ -109,34 +109,61 @@ och plugin remove -i                        # 交互式选择删除
 
 ## 配置文件
 
-工具会读取 opencode 的配置文件，支持两种来源：
+工具会读取 opencode 的配置文件，同时兼容 opencode v1（`plugin` 键）与 v2（`plugins` 键）格式：
+
+- 两个键并存时以 `plugin` 为准（对齐 v2 迁移语义：含 v1 键的文件会被整体迁移，字面 `plugins` 被忽略）
+- 支持全部条目形态：字符串、`[package, options]` 元组（v1）、`{package, options}` 对象（v2）
+- 无法识别的条目会显示为"⚠️ 未识别格式"，删除时原样保留
+- 写回时保持原文件的键风格与 JSONC 注释
 
 ### 项目级配置
 
-在当前目录向上查找，按优先级依次查找：
+在当前目录向上逐层查找，每层按以下优先级选取（对齐 v2 合并覆盖顺序）：
 
-- `opencode.json`
-- `.opencode.json`
+1. `.opencode/opencode.json`、`.opencode/opencode.jsonc`
+2. `opencode.json`、`opencode.jsonc`
+3. `.opencode.json`、`.opencode.jsonc`
+
+同一层内若存在声明了 `plugin`/`plugins` 键的文件，则优先选择该文件（避免漏配插件）。
+
+> 与 opencode v2 的差异：v2 会合并所有层级的配置文件，本工具只操作单个文件（就近原则）。
 
 ### 全局配置
 
-| 平台 | 路径 |
-|------|------|
-| Linux | `$XDG_CONFIG_HOME/opencode/opencode.json` 或 `~/.config/opencode/opencode.json` |
-| macOS | `~/Library/Application Support/opencode/opencode.json` |
-| Windows | `%APPDATA%/opencode/opencode.json` |
+全局配置目录下的候选文件（取第一个存在的，`opencode.jsonc` 优先级最高）：
 
-配置文件示例（支持 JSONC 注释）：
+- `opencode.jsonc`、`opencode.json`、`config.json`
+
+| 环境 | 配置目录 |
+|------|----------|
+| `OPENCODE_CONFIG_DIR`（优先） | 直接作为配置目录 |
+| `XDG_CONFIG_HOME` | `$XDG_CONFIG_HOME/opencode` |
+| 默认（全平台） | `~/.config/opencode` |
+
+> 与 opencode v2 的差异：v2 会合并三个全局文件，本工具只取优先级最高的一个。
+
+### 插件条目格式
 
 ```jsonc
 {
   "plugin": [
-    "@scope/plugin-a@1.0.0",         // npm 固定版本
-    "@scope/plugin-b@latest",        // npm 最新版本
-    "plugin-c@git+https://github.com/user/plugin-c.git"  // git 仓库
+    "@scope/plugin-a@1.0.0",         // npm 固定版本（升级时跳过）
+    "@scope/plugin-b@^1.2.0",        // npm 范围（允许升级）
+    "plugin-c@latest",               // npm tag（允许升级）
+    "plugin-d@git+https://github.com/user/plugin-d.git",  // git 仓库
+    "github:user/plugin-e",          // github 简写
+    "./local-plugin",                // 本地路径（仅展示，无缓存管理）
+    ["plugin-f", {"option": true}],  // v1 元组形式
+    {"package": "plugin-g", "options": {}}  // v2 对象形式
   ]
 }
 ```
+
+### 插件缓存
+
+缓存目录与 opencode v2 一致：`~/.cache/opencode/packages/<引用>`（`XDG_CACHE_HOME` 优先；Windows 下目录名中的非法字符会替换为 `_`）。
+
+> 注意：v2 的 git 插件缓存目录名采用原始引用，旧版本 och 生成的 git 插件缓存目录不再被识别（如需可手动清理）。
 
 ## 开发
 

@@ -6,7 +6,7 @@ import Table from 'cli-table3'
 import type {UpgradeResult} from '../../services/plugin.js'
 
 import {describeConfigLocations, loadGlobalConfigWithPath, loadProjectConfigWithPath} from '../../services/config.js'
-import {resolvePluginInfo, upgradePlugin} from '../../services/plugin.js'
+import {normalizePluginEntries, readPluginEntries, resolvePluginInfo, upgradePlugin} from '../../services/plugin.js'
 
 export default class PluginUpgrade extends Command {
   static args = {
@@ -42,7 +42,11 @@ export default class PluginUpgrade extends Command {
 
     const result = flags.global ? loadGlobalConfigWithPath() : loadProjectConfigWithPath()
 
-    if (!result || !result.config.plugin || result.config.plugin.length === 0) {
+    // 双键读取（plugin/plugins）并归一化条目，仅升级可解析条目
+    const entries = result ? normalizePluginEntries(readPluginEntries(result.config).raw) : []
+    const managed = entries.filter((entry) => entry.managed)
+
+    if (!result || entries.length === 0) {
       const scope = flags.global ? '全局' : '项目级'
       if (result) {
         this.log(chalk.yellow(`⚠️ 未找到${scope}插件配置（配置文件：${result.path}）`))
@@ -54,7 +58,12 @@ export default class PluginUpgrade extends Command {
       return
     }
 
-    const plugins = result.config.plugin!
+    if (managed.length === 0) {
+      this.log(chalk.yellow('⚠️ 配置中没有可升级的插件条目（未识别条目已保留）。'))
+      return
+    }
+
+    const plugins = managed.map((entry) => entry.ref!)
 
     try {
       // 交互式模式：列出插件供用户多选
