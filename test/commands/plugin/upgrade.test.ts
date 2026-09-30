@@ -1,3 +1,4 @@
+import {runCommand} from '@oclif/test'
 import {expect} from 'chai'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -56,6 +57,33 @@ describe('plugin upgrade', () => {
     const result = await upgradePlugin('missing-plugin', cacheDir)
     expect(result.previousVersion).to.be.null
     expect(result.currentVersion).to.be.null
+  })
+
+  describe('未找到配置时的提示文案', () => {
+    const emptyDir = path.join(os.tmpdir(), 'och-test-upgrade-empty')
+
+    beforeEach(() => {
+      // 隔离空目录，避免向上查找到真实项目配置
+      fs.rmSync(emptyDir, {force: true, recursive: true})
+      fs.mkdirSync(emptyDir, {recursive: true})
+    })
+
+    after(() => {
+      fs.rmSync(emptyDir, {force: true, recursive: true})
+    })
+
+    it('mentions all candidate config filenames', async () => {
+      const originalCwd = process.cwd()
+      process.chdir(emptyDir)
+      try {
+        const {stdout} = await runCommand('plugin upgrade foo')
+        expect(stdout).to.include('未找到项目级配置文件')
+        expect(stdout).to.include('opencode.jsonc')
+        expect(stdout).to.include('.opencode.jsonc')
+      } finally {
+        process.chdir(originalCwd)
+      }
+    })
   })
 
   describe('interactive', () => {

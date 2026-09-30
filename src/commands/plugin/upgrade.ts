@@ -2,11 +2,10 @@ import {checkbox} from '@inquirer/prompts'
 import {Args, Command, Flags} from '@oclif/core'
 import chalk from 'chalk'
 import Table from 'cli-table3'
-import path from 'node:path'
 
 import type {UpgradeResult} from '../../services/plugin.js'
 
-import {getPlatformConfigDir, loadGlobalConfigWithPath, loadProjectConfigWithPath} from '../../services/config.js'
+import {describeConfigLocations, loadGlobalConfigWithPath, loadProjectConfigWithPath} from '../../services/config.js'
 import {resolvePluginInfo, upgradePlugin} from '../../services/plugin.js'
 
 export default class PluginUpgrade extends Command {
@@ -48,9 +47,7 @@ export default class PluginUpgrade extends Command {
       if (result) {
         this.log(chalk.yellow(`⚠️ 未找到${scope}插件配置（配置文件：${result.path}）`))
       } else {
-        const configPath = flags.global
-          ? path.join(getPlatformConfigDir(), 'opencode.json')
-          : 'opencode.json 或 .opencode.json'
+        const configPath = describeConfigLocations(flags.global)
         this.log(chalk.yellow(`⚠️ 未找到${scope}配置文件（查找路径：${configPath}）`))
       }
 

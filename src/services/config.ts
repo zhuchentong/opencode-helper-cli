@@ -1,4 +1,4 @@
-import {parse as parseJsonc} from 'jsonc-parser'
+import {applyEdits, modify, parse as parseJsonc} from 'jsonc-parser'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -12,6 +12,10 @@ const CONFIG_FILENAMES = [
   '.opencode.json',
   '.opencode.jsonc'
 ]
+
+// 全局配置目录下的候选文件名，按优先级排序
+// 参见官方文档：https://opencode.ai/docs/config/
+const GLOBAL_CONFIG_FILENAMES = ['opencode.json', 'opencode.jsonc']
 
 /**
  * 获取平台相关的配置目录
@@ -41,10 +45,12 @@ export function getPlatformConfigDir(): string {
 }
 
 /**
- * 获取全局配置文件的默认路径
+ * 获取全局配置目录下的默认候选文件路径列表
+ * 按优先级返回 opencode.json、opencode.jsonc
  */
-function getDefaultGlobalConfigPath(): string {
-  return path.join(getPlatformConfigDir(), 'opencode.json')
+function getGlobalConfigCandidates(): string[] {
+  const configDir = getPlatformConfigDir()
+  return GLOBAL_CONFIG_FILENAMES.map((filename) => path.join(configDir, filename))
 }
 
 /**
@@ -68,16 +74,43 @@ export interface ConfigResult {
 }
 
 /**
+ * 将候选文件名列表拼接为提示文案
+ */
+function joinCandidates(names: string[]): string {
+  if (names.length <= 2) return names.join(' 或 ')
+  return `${names.slice(0, -1).join('、')} 或 ${names.at(-1)}`
+}
+
+/**
+ * 生成配置文件的查找路径说明文案
+ * @param global 是否为全局配置
+ * @returns 用于提示用户的查找路径说明
+ */
+export function describeConfigLocations(global: boolean): string {
+  if (global) {
+    // 全局：配置目录下的候选文件完整路径
+    return joinCandidates(GLOBAL_CONFIG_FILENAMES.map((filename) => path.join(getPlatformConfigDir(), filename)))
+  }
+
+  // 项目级：从当前目录向上查找的候选文件名
+  return joinCandidates([...CONFIG_FILENAMES])
+}
+
+/**
  * 加载全局 opencode 配置及其文件路径
- * @param customPath 自定义配置路径，不传则使用默认路径
+ * @param customPath 自定义配置路径，不传则按优先级依次尝试候选文件名
  * @returns 配置结果，文件不存在或解析失败返回 null
  */
 export function loadGlobalConfigWithPath(customPath?: string): ConfigResult | null {
-  const configPath = customPath ?? getDefaultGlobalConfigPath()
-  if (!fs.existsSync(configPath)) return null
-  const config = parseConfig(configPath)
-  if (!config) return null
-  return {config, path: configPath}
+  // 显式指定路径时直接使用，不受候选列表影响
+  const candidates = customPath ? [customPath] : getGlobalConfigCandidates()
+  for (const configPath of candidates) {
+    if (!fs.existsSync(configPath)) continue
+    const config = parseConfig(configPath)
+    if (config) return {config, path: configPath}
+  }
+
+  return null
 }
 
 /**
@@ -120,7 +153,7 @@ export function loadGlobalConfig(customPath?: string): null | OpenCodeConfig {
 
 /**
  * 从指定目录开始向上查找项目级 opencode 配置
- * 依次查找 opencode.json 和 .opencode.json
+ * 每层目录依次尝试 CONFIG_FILENAMES 中的候选文件名
  * @param startDir 起始查找目录，默认为当前工作目录
  * @returns 配置对象，未找到返回 null
  */
@@ -128,12 +161,33 @@ export function loadProjectConfig(startDir?: string): null | OpenCodeConfig {
   return loadProjectConfigWithPath(startDir)?.config ?? null
 }
 
+// JSONC 文本编辑时的格式化选项（2 空格缩进）
+const JSONC_FORMAT_OPTIONS = {insertSpaces: true, tabSize: 2}
+
 /**
  * 将配置对象写回文件
+ * - 文件不存在：新建纯 JSON（自动创建父目录）
+ * - 文件已存在：基于原文本做 JSONC 编辑，保留注释与未改动部分的格式
  * @param filePath 配置文件路径
  * @param config 配置对象
  */
 export function saveConfig(filePath: string, config: OpenCodeConfig): void {
-  const content = JSON.stringify(config, null, 2) + '\n'
+  if (!fs.existsSync(filePath)) {
+    // 确保父目录存在后新建纯 JSON
+    fs.mkdirSync(path.dirname(filePath), {recursive: true})
+    fs.writeFileSync(filePath, JSON.stringify(config, null, 2) + '\n', 'utf8')
+    return
+  }
+
+  // 读取原文本，对配置对象的每个顶层键做文本级修改，保留注释
+  let content = fs.readFileSync(filePath, 'utf8')
+  for (const [key, value] of Object.entries(config)) {
+    // 值未变化的键会返回空编辑集，开销可忽略
+    const edits = modify(content, [key], value, {formattingOptions: JSONC_FORMAT_OPTIONS})
+    content = applyEdits(content, edits)
+  }
+
+  // 保持尾换行的原有习惯
+  if (!content.endsWith('\n')) content += '\n'
   fs.writeFileSync(filePath, content, 'utf8')
 }
